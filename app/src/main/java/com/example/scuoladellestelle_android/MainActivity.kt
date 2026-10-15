@@ -6,10 +6,15 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,12 +35,34 @@ fun SchermataOperatore() {
     var fogliList by remember { mutableStateOf(listOf<StructElencofogliJson>()) }
     var selectedId by remember { mutableStateOf<Int?>(null) }
 
+    // 🎯 Memoria di stato per la stringa del singolo foglio ricevuto
+    var jsonFoglioSelezionato by remember { mutableStateOf<String?>(null) }
+
+    var showConfermaDialog by remember { mutableStateOf(false) }
+    var idDaScaricareTpc by remember { mutableStateOf<Int?>(null) }
+
+    // 🎯 AGGANCIO DEL TUBO RADIO: Lo facciamo una volta sola all'avvio dell'app!
+    LaunchedEffect(Unit) {
+        ApiService.onContenutoFoglioRicevuto = { jsonRicevuto ->
+            if (jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
+                // Il dato è entrato pulito: salviamo il testo e SPEGNIAMO la rotellina!
+                jsonFoglioSelezionato = jsonRicevuto
+                statusMessage = "Foglio pronto per essere compilato."
+                isLoading = false
+            } else {
+                isLoading = false
+                statusMessage = "Errore nel download del modulo."
+            }
+        }
+    }
+
     Column(modifier = Modifier.fillMaxSize()) {
 
-        // 1. ZONA ALTA (Modulo Autonomo per i WebSocket)
+        // 1. ZONA ALTA
         ZonaAltaView(
             isConnected = isConnected,
             isLoading = isLoading,
+            statusMessage = statusMessage,
             onStartLoading = { messaggio ->
                 isLoading = true
                 statusMessage = messaggio
@@ -50,7 +77,7 @@ fun SchermataOperatore() {
             }
         )
 
-        // 2. ZONA CENTRALE (Modulo Autonomo)
+        // 2. ZONA CENTRALE
         ZonaCentraleView(
             modifier = Modifier.fillMaxWidth().weight(1f),
             statusMessage = statusMessage,
@@ -58,17 +85,12 @@ fun SchermataOperatore() {
             fogliList = fogliList,
             selectedId = selectedId,
             onFoglioSelezionato = { id ->
-                selectedId = id
-                isLoading = true
-                statusMessage = "Scaricamento foglio ID_Questionario: $id..."
-
-                // Inviamo la richiesta del singolo foglio dentro il tubo del WebSocket
-                val comandoFoglioJson = "{\"type\":\"RICHIEDI_FOGLIO\",\"id_questionario\":$id}"
-                ApiService.inviaComandoAlPC(comandoFoglioJson)
+                idDaScaricareTpc = id
+                showConfermaDialog = true
             },
             onDownloadCompletato = { json ->
                 isLoading = false
-                statusMessage = "Foglio $selectedId pronto per essere compilato."
+                statusMessage = "Foglio pronto per essere compilato."
             },
             onErrore = {
                 isLoading = false
@@ -76,7 +98,37 @@ fun SchermataOperatore() {
             }
         )
 
-        // 3. ZONA BASSA (Modulo Autonomo)
+        // 3. ZONA BASSA
         ZonaBassaView()
+    }
+
+    if (showConfermaDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfermaDialog = false },
+            title = { Text("Scaricamento Foglio", fontSize = 18.sp) },
+            text = { Text("Vuoi scaricare il file JSON del modulo selezionato (ID: $idDaScaricareTpc) dal server VB.NET?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfermaDialog = false
+                        idDaScaricareTpc?.let { id ->
+                            selectedId = id
+                            isLoading = true
+                            statusMessage = "Richiesta file JSON in corso..."
+
+                            val comandoFoglioJson = "{\"type\":\"RICHIEDI_FOGLIO\",\"id_questionario\":$id}"
+                            ApiService.inviaComandoAlPC(comandoFoglioJson)
+                        }
+                    }
+                ) {
+                    Text("Sì, Scarica", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfermaDialog = false }) {
+                    Text("Annulla", color = Color(0xFF475467))
+                }
+            }
+        )
     }
 }

@@ -1,16 +1,18 @@
 package com.example.scuoladellestelle_android
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -19,88 +21,120 @@ import androidx.compose.ui.unit.sp
 fun ZonaAltaView(
     isConnected: Boolean,
     isLoading: Boolean,
+    statusMessage: String,
     onStartLoading: (String) -> Unit,
     onStatusChange: (Boolean, String, List<StructElencofogliJson>) -> Unit
 ) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("config_rete", Context.MODE_PRIVATE) }
+    var showDialog by remember { mutableStateOf(false) }
+
+    var inputIp by remember { mutableStateOf(prefs.getString("ip_pc", NetworkConfig.IP_PC) ?: NetworkConfig.IP_PC) }
+    var inputPorta by remember { mutableStateOf(prefs.getString("porta_pc", NetworkConfig.PORTA_PC) ?: NetworkConfig.PORTA_PC) }
+    var inputNota by remember { mutableStateOf(prefs.getString("nota_utente", "Tablet Aula 1") ?: "Tablet Aula 1") }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(120.dp)
+            .height(55.dp) // 🎯 ALTEZZA DIMEZZATA FISSA E PERMANENTE
             .background(Color.White)
             .border(1.dp, Color(0xFFE4E7EC))
-            .padding(24.dp),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Sinistra: Stato Connessione e Dettagli IP/Porta
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = if (isConnected) "🟢 " else "🔴 ", fontSize = 24.sp)
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(onClick = { showDialog = true }, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Impostazioni Rete",
+                    tint = Color(0xFF475467),
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Tutto su una riga compattata per non generare doppie righe verticali
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(text = if (isConnected) "🟢" else "🔴", fontSize = 14.sp)
                 Text(
-                    text = if (isConnected) "Connesso al PC" else "Non Connesso",
-                    fontSize = 16.sp,
+                    text = if (isConnected) statusMessage.take(30) else "Non Connesso",
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isConnected) Color(0xFF12B76A) else Color(0xFFF04438)
                 )
-            }
-            if (!isConnected) {
                 Text(
-                    text = "Tentativo su IP: ${NetworkConfig.IP_PC}  Porta: ${NetworkConfig.PORTA_PC}",
-                    fontSize = 13.sp,
-                    color = Color(0xFF98A2B3),
-                    fontWeight = FontWeight.Medium
+                    text = "(${NetworkConfig.IP_PC})",
+                    fontSize = 11.sp,
+                    color = Color(0xFF98A2B3)
                 )
             }
         }
 
-        // Destra: I due pulsanti sequenziali
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-
-            // PULSANTE 1: Apre il canale stabile WebSocket verso il server VB.NET
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
-                    onStartLoading("Apertura canale con il server VB in corso...")
-
-                    // Chiamiamo il nuovo ApiService per connettere il tubo
+                    onStartLoading("Autenticazione in corso su SQLite...")
                     ApiService.connettiAlServer(
-                        onStatoConnessione = { connesso ->
-                            if (connesso) {
-                                onStatusChange(true, "Server VB Raggiunto con successo! Ora puoi richiedere l'elenco.", emptyList())
-                            } else {
-                                onStatusChange(false, "Connessione fallita o interrotta. Controlla il server VB.", emptyList())
-                            }
-                        },
-                        onElencoFogli = { listaRicevuta ->
-                            onStatusChange(true, "Elenco caricato. Disponibili ${listaRicevuta.size} fogli.", listaRicevuta)
-                        },
-                        onFoglioDati = { contenutoJson ->
-                            // Lo gestiremo nella Fase 3, per ora mantiene lo stato pronto
-                            onStatusChange(true, "Foglio ricevuto ed elaborato con successo.", emptyList())
-                        }
+                        context = context,
+                        notaUtente = inputNota,
+                        onStatoConnessione = { connesso, messaggio -> onStatusChange(connesso, messaggio, emptyList()) },
+                        onElencoFogli = { listaRicevuta -> onStatusChange(true, "Elenco caricato con successo.", listaRicevuta) },
+                        onFoglioDati = { _ -> }
                     )
                 },
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
-                shape = RoundedCornerShape(8.dp),
+                shape = RoundedCornerShape(6.dp),
                 enabled = !isLoading
             ) {
-                Text("Verifica Connessione", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
 
-            // PULSANTE 2: Spinge il comando di richiesta dentro il canale già aperto
             Button(
                 onClick = {
                     onStartLoading("Richiesta elenco fogli in corso...")
-
-                    // Spediamo la richiesta testuale concordata direttamente nel tubo del WebSocket
                     val comandoJson = "{\"type\":\"RICHIEDI_ELENCO\"}"
                     ApiService.inviaComandoAlPC(comandoJson)
                 },
+                modifier = Modifier.height(34.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                shape = RoundedCornerShape(8.dp),
-                enabled = isConnected && !isLoading // Attivo SOLO se il pallino è verde
+                shape = RoundedCornerShape(6.dp),
+                enabled = isConnected && !isLoading
             ) {
-                Text("Aggiorna Elenco Fogli", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Text("Aggiorna", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
             }
         }
+    }
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Configurazione Rete", fontWeight = FontWeight.Bold, fontSize = 16.sp) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(value = inputIp, onValueChange = { inputIp = it }, label = { Text("IP PC Windows") }, singleLine = true)
+                    OutlinedTextField(value = inputPorta, onValueChange = { inputPorta = it }, label = { Text("Porta Server") }, singleLine = true)
+                    OutlinedTextField(value = inputNota, onValueChange = { inputNota = it }, label = { Text("Nota Postazione") }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                Button(onClick = {
+                    prefs.edit().apply {
+                        putString("ip_pc", inputIp)
+                        putString("porta_pc", inputPorta)
+                        putString("nota_utente", inputNota)
+                        apply()
+                    }
+                    NetworkConfig.IP_PC = inputIp
+                    NetworkConfig.PORTA_PC = inputPorta
+                    showDialog = false
+                }) { Text("Salva") }
+            }
+        )
     }
 }

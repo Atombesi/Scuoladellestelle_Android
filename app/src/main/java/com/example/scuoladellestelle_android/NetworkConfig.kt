@@ -1,13 +1,16 @@
 package com.example.scuoladellestelle_android
 
 /**
- * CONFIGURAZIONE RETE LOCALE: Modifica qui quando cambia l'IP del PC o la porta del server VB.
- * Questo file è isolato per permetterti modifiche rapide senza toccare la grafica.
+ * CONFIGURAZIONE DI RETE DINAMICA: Contiene i parametri modificabili dal tablet.
+ * All'avvio dell'app vengono sovrascritti con i valori reali salvati in memoria.
  */
 object NetworkConfig {
-    const val IP_PC = "192.168.68.57"  // <-- Inserisci qui l'IP reale del tuo PC
-    const val PORTA_PC = "8080"        // <-- Inserisci qui la porta impostata nel programma VB
+    var IP_PC: String = "192.168.68.57"  // Valore iniziale di fallback
+    var PORTA_PC: String = "8080"        // Valore iniziale di fallback
 
-    // Genera automaticamente l'URL di base per le chiamate HTTP
-    const val BASE_URL = "http://$IP_PC:$PORTA_PC"
+    /**
+     * Genera dinamicamente l'URL per le chiamate HTTP o i WebSocket.
+     */
+    val BASE_URL: String
+        get() = "http://$IP_PC:$PORTA_PC"
 }

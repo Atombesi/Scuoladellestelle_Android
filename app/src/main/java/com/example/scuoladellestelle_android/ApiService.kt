@@ -1,104 +1,119 @@
 package com.example.scuoladellestelle_android
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.provider.Settings
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-/**
- * SERVIZIO DI RETE WEB_SOCKET NATIVO (ApiService): Gestisce l'unico canale continuo verso il PC.
- * Elimina totalmente i blocchi di sicurezza HTTP (EPERM) del tablet.
- */
+
 object ApiService {
 
     private const val TAG = "ApiService"
+    private val scope = CoroutineScope(Dispatchers.Main)
 
-    // Il client OkHttp configurato con i tempi di attesa corretti
     private val client = OkHttpClient.Builder()
-        .readTimeout(0, TimeUnit.MILLISECONDS) // Mantiene il canale aperto all'infinito
+        .readTimeout(0, TimeUnit.MILLISECONDS)
         .build()
 
     private var webSocket: WebSocket? = null
 
-    // Riferimenti alle funzioni grafiche per aggiornare l'interfaccia in tempo real
-    private var onConnessioneStabilità: ((Boolean) -> Unit)? = null
-    private var onElencoRicevuto: ((List<StructElencofogliJson>) -> Unit)? = null
-    private var onContenutoFoglioRicevuto: ((String) -> Unit)? = null
+    var onConnessioneStabilità: ((Boolean, String) -> Unit)? = null
+    var onElencoRicevuto: ((List<StructElencofogliJson>) -> Unit)? = null
+    var onContenutoFoglioRicevuto: ((String) -> Unit)? = null
 
     /**
-     * 🌐 APRE IL CANALE: Connette il tablet al server VB.NET (ws://IP_PC:PORTA)
+     * 🌐 CONNETTI ED EFFETTUA HANDSHAKE SU RETE LOCALE
      */
+    @SuppressLint("HardwareIds")
     fun connettiAlServer(
-        onStatoConnessione: (Boolean) -> Unit,
+        context: Context,
+        notaUtente: String,
+        onStatoConnessione: (Boolean, String) -> Unit,
         onElencoFogli: (List<StructElencofogliJson>) -> Unit,
         onFoglioDati: (String) -> Unit
     ) {
-        // Salviamo i riferimenti per poterli usare quando arrivano i messaggi dal PC
         this.onConnessioneStabilità = onStatoConnessione
         this.onElencoRicevuto = onElencoFogli
-        this.onContenutoFoglioRicevuto = onFoglioDati
+      //  this.onContenutoFoglioRicevuto = onFoglioDati
 
-        // Se c'è già un vecchio socket aperto, lo chiudiamo prima di ricominciare
-        webSocket?.close(1000, "Nuovo tentativo di connessione")
+        webSocket?.close(1000, "Reset")
 
-        // Trasformiamo l'indirizzo HTTP standard in un URL WebSocket (ws://)
+        // Recuperiamo l'ID hardware univoco e fisso del tablet (ANDROID_ID)
+        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown_tablet"
+
         val urlWebSocket = NetworkConfig.BASE_URL.replace("http://", "ws://")
-        Log.d(TAG, "Tentativo di apertura canale su: $urlWebSocket")
-
         val richiesta = Request.Builder().url(urlWebSocket).build()
 
-        // Avviamo l'ascoltatore nativo del tubo
         webSocket = client.newWebSocket(richiesta, object : WebSocketListener() {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
-                Log.d(TAG, "Tubo radio hardware aperto con successo!")
-                // Nota: Non accendiamo ancora il pallino verde. Aspettiamo l'HANDSHAKE_OK dal PC per sicurezza.
+                Log.d(TAG, "Tubo aperto. Spingo pacchetto di Handshake...")
+
+                // 🎯 INVIA RICHIESTA REGISTRAZIONE SU SQLite AL SERVER VB
+                val pacchettoHandshake = JSONObject().apply {
+                    put("type", "HANDSHAKE")
+                    put("device_id", androidId)
+                    put("nota_utente", notaUtente.ifBlank { "Postazione Tablet" })
+                }
+                webSocket.send(pacchettoHandshake.toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.d(TAG, "Messaggio arrivato dal server VB: $text")
-
-                // Forza l'elaborazione del testo a saltare sul Thread della grafica
-                kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Main).launch {
-                    elaboraMessaggioDalPC(text)
+                scope.launch {
+                    elaboraTestoDalSocket(text)
                 }
             }
 
-
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "Il server sta chiudendo il canale: $reason")
-                onConnessioneStabilità?.invoke(false)
+                scope.launch { onConnessioneStabilità?.invoke(false, "Connessione interrotta dal server PC.") }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                Log.e(TAG, "Errore di linea hardware o PC spento: ${t.message}")
-                onConnessioneStabilità?.invoke(false)
+                scope.launch { onConnessioneStabilità?.invoke(false, "Server non raggiungibile. Verifica IP e porta.") }
             }
         })
     }
 
-    /**
-     * 📨 DECODIFICA I COMANDI IN ARRIVO DAL SERVER VB.NET
-     */
-    private fun elaboraMessaggioDalPC(testoJson: String) {
+    private fun elaboraTestoDalSocket(testoGrezzo: String) {
         try {
-            val json = JSONObject(testoJson)
-            val tipoMessaggio = json.optString("type")
+            val json = JSONObject(testoGrezzo)
 
-            when (tipoMessaggio) {
+            when (json.optString("type")) {
                 "HANDSHAKE_OK" -> {
-                    // Il PC ha risposto all'apertura del tubo: la linea è libera!
-                    onConnessioneStabilità?.invoke(true)
+                    // 🎯 DISPOSITIVO AUTORIZZATO: La linea è stabile e aperta.
+                    // Non chiamiamo mai metodi di close qui sotto, lasciamo il tubo attivo per sempre!
+                    val nomeAssegnato = json.optString("nome_dispositivo", "Tablet Registrato")
+                    onConnessioneStabilità?.invoke(true, "Connessione stabilita con: $nomeAssegnato")
+                }
+
+                "HANDSHAKE_PENDING" -> {
+                    // Presente nel DB ma in attesa di spunta ENABLED = 1
+                    val messaggioServer = json.optString("messaggio", "In attesa di approvazione.")
+                    onConnessioneStabilità?.invoke(false, messaggioServer)
+
+                    // Chiudiamo il socket SOLO se l'amministratore ci ha esplicitamente rifiutato/messo in attesa
+                    webSocket?.close(1000, "In attesa di sblocco amministratore")
+                    webSocket = null
+                }
+
+                "HANDSHAKE_ERROR" -> {
+                    val messaggioErrore = json.optString("messaggio", "Errore autenticazione.")
+                    onConnessioneStabilità?.invoke(false, messaggioErrore)
+                    webSocket?.close(1000, "Errore rifiuto")
+                    webSocket = null
                 }
 
                 "ELENCO_FOGLI_RISPOSTA" -> {
-                    // Sono arrivati i byte con i nomi dei bambini dal server VB
                     val datiArray = json.getJSONArray("dati")
                     val listaFogli = mutableListOf<StructElencofogliJson>()
 
@@ -115,37 +130,40 @@ object ApiService {
                             )
                         )
                     }
+
                     onElencoRicevuto?.invoke(listaFogli)
                 }
+                // 🎯 AGGIUNTA DIAGNOSTICA: Intercettiamo il file JSON del foglio inviato da VB
+                // 🎯 INTERCETTAZIONE E DECODIFICA DEL FOGLIO REALE (Fase 3)
+                "FOGLIO_RICEVUTO" -> {
+                    try {
+                        // Estraiamo l'oggetto JSON contenuto nel tag "dati" usando il motore nativo
+                        val stringaOggettoDati = json.getJSONObject("dati").toString()
 
-                "SALVA_FOGLIO_OK" -> {
-                    onContenutoFoglioRicevuto?.invoke("OK")
+                        Log.d(TAG, "🟢 SUCCESS! I byte del foglio sono entrati nel telefono.")
+
+                        // Passiamo il testo pulito alla MainActivity per sbloccare la grafica
+                        onContenutoFoglioRicevuto?.invoke(stringaOggettoDati)
+                    } catch (ex: Exception) {
+                        Log.e(TAG, "Errore estrazione testo del foglio: ${ex.message}")
+                        onContenutoFoglioRicevuto?.invoke("ERRORE")
+                    }
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Errore decodifica JSON dal server: ${e.message}")
+            Log.e(TAG, "Errore decodifica nel Socket: ${e.message}")
         }
     }
 
-    /**
-     * 📤 INVIA UN COMANDO DENTRO IL TUBO VERSO IL PC
-     */
     fun inviaComandoAlPC(comandoJson: String) {
-        webSocket?.let {
-            if (it.send(comandoJson)) {
-                Log.d(TAG, "Inviato con successo al PC: $comandoJson")
-            } else {
-                Log.e(TAG, "Impossibile inviare dati, il tubo è ostruito.")
-            }
+        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+            webSocket?.send(comandoJson)
         }
     }
 
-    /**
-     * 🛑 CHIUDE IL CANALE DEFINITIVAMENTE
-     */
     fun disconnetti() {
-        webSocket?.close(1000, "Chiusura manuale dall'applicazione")
+        webSocket?.close(1000, "Chiusura utente")
         webSocket = null
-        onConnessioneStabilità?.invoke(false)
+        scope.launch { onConnessioneStabilità?.invoke(false, "Disconnesso.") }
     }
 }
