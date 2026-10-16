@@ -6,6 +6,7 @@ import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -14,7 +15,6 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
-
 
 object ApiService {
 
@@ -27,12 +27,15 @@ object ApiService {
 
     private var webSocket: WebSocket? = null
 
+    // 🎯 Bandiera di controllo hardware per il Timeout di sicurezza
+    private var elencoGiaArrivato = false
+
     var onConnessioneStabilità: ((Boolean, String) -> Unit)? = null
     var onElencoRicevuto: ((List<StructElencofogliJson>) -> Unit)? = null
     var onContenutoFoglioRicevuto: ((String) -> Unit)? = null
 
     /**
-     * 🌐 CONNETTI ED EFFETTUA HANDSHAKE SU RETE LOCALE
+     * 🌐 CONNETTI, EFFETTUA HANDSHAKE E RICHIEDI ELENCO IN AUTOMATICO
      */
     @SuppressLint("HardwareIds")
     fun connettiAlServer(
@@ -44,13 +47,14 @@ object ApiService {
     ) {
         this.onConnessioneStabilità = onStatoConnessione
         this.onElencoRicevuto = onElencoFogli
-      //  this.onContenutoFoglioRicevuto = onFoglioDati
 
         webSocket?.close(1000, "Reset")
+        webSocket = null
 
-        // Recuperiamo l'ID hardware univoco e fisso del tablet (ANDROID_ID)
+        // Resettiamo la bandiera all'inizio di ogni tentativo di connessione
+        elencoGiaArrivato = false
+
         val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown_tablet"
-
         val urlWebSocket = NetworkConfig.BASE_URL.replace("http://", "ws://")
         val richiesta = Request.Builder().url(urlWebSocket).build()
 
@@ -58,8 +62,6 @@ object ApiService {
 
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "Tubo aperto. Spingo pacchetto di Handshake...")
-
-                // 🎯 INVIA RICHIESTA REGISTRAZIONE SU SQLite AL SERVER VB
                 val pacchettoHandshake = JSONObject().apply {
                     put("type", "HANDSHAKE")
                     put("device_id", androidId)
@@ -75,13 +77,27 @@ object ApiService {
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                scope.launch { onConnessioneStabilità?.invoke(false, "Connessione interrotta dal server PC.") }
+                scope.launch {
+                    onConnessioneStabilità?.invoke(false, "Connessione interrotta dal server PC.")
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                scope.launch { onConnessioneStabilità?.invoke(false, "Server non raggiungibile. Verifica IP e porta.") }
+                scope.launch {
+                    onConnessioneStabilità?.invoke(false, "Server non raggiungibile. Verifica IP e porta.")
+                }
             }
         })
+
+        // 🎯 1. TIMER DI TIMEOUT DI SICUREZZA (8 Secondi)
+        scope.launch {
+            delay(8000) // Aspetta 8 secondi ad orologio fermo in background
+            if (!elencoGiaArrivato) {
+                // Se dopo 8 secondi l'elenco non è arrivato, consideriamo il server muto o congestionato
+                Log.e(TAG, "⏳ TIMEOUT! Il server VB.NET non ha risposto entro 8 secondi.")
+                disconnettiConMessaggio("Il server non risponde alla richiesta. Riprova.")
+            }
+        }
     }
 
     private fun elaboraTestoDalSocket(testoGrezzo: String) {
@@ -90,30 +106,29 @@ object ApiService {
 
             when (json.optString("type")) {
                 "HANDSHAKE_OK" -> {
-                    // 🎯 DISPOSITIVO AUTORIZZATO: La linea è stabile e aperta.
-                    // Non chiamiamo mai metodi di close qui sotto, lasciamo il tubo attivo per sempre!
                     val nomeAssegnato = json.optString("nome_dispositivo", "Tablet Registrato")
-                    onConnessioneStabilità?.invoke(true, "Connessione stabilita con: $nomeAssegnato")
+                    onConnessioneStabilità?.invoke(true, "Connesso: $nomeAssegnato")
+
+                    // 🎯 2. AUTOMATISMO CASCATA: L'handshake è OK, richiediamo subito l'elenco fogli!
+                    Log.d(TAG, "🚀 Handshake Approvato. Richiedo l'elenco fogli autonomamente...")
+                    val comandoAutonomo = "{\"type\":\"RICHIEDI_ELENCO\"}"
+                    webSocket?.send(comandoAutonomo)
                 }
 
                 "HANDSHAKE_PENDING" -> {
-                    // Presente nel DB ma in attesa di spunta ENABLED = 1
                     val messaggioServer = json.optString("messaggio", "In attesa di approvazione.")
-                    onConnessioneStabilità?.invoke(false, messaggioServer)
-
-                    // Chiudiamo il socket SOLO se l'amministratore ci ha esplicitamente rifiutato/messo in attesa
-                    webSocket?.close(1000, "In attesa di sblocco amministratore")
-                    webSocket = null
+                    disconnettiConMessaggio(messaggioServer)
                 }
 
                 "HANDSHAKE_ERROR" -> {
                     val messaggioErrore = json.optString("messaggio", "Errore autenticazione.")
-                    onConnessioneStabilità?.invoke(false, messaggioErrore)
-                    webSocket?.close(1000, "Errore rifiuto")
-                    webSocket = null
+                    disconnettiConMessaggio(messaggioErrore)
                 }
 
                 "ELENCO_FOGLI_RISPOSTA" -> {
+                    // 🎯 3. OBIETTIVO RAGGIUNTO: I dati dell'elenco sono entrati! Disattiviamo il Timeout
+                    elencoGiaArrivato = true
+
                     val datiArray = json.getJSONArray("dati")
                     val listaFogli = mutableListOf<StructElencofogliJson>()
 
@@ -130,19 +145,13 @@ object ApiService {
                             )
                         )
                     }
-
                     onElencoRicevuto?.invoke(listaFogli)
                 }
-                // 🎯 AGGIUNTA DIAGNOSTICA: Intercettiamo il file JSON del foglio inviato da VB
-                // 🎯 INTERCETTAZIONE E DECODIFICA DEL FOGLIO REALE (Fase 3)
+
                 "FOGLIO_RICEVUTO" -> {
                     try {
-                        // Estraiamo l'oggetto JSON contenuto nel tag "dati" usando il motore nativo
                         val stringaOggettoDati = json.getJSONObject("dati").toString()
-
                         Log.d(TAG, "🟢 SUCCESS! I byte del foglio sono entrati nel telefono.")
-
-                        // Passiamo il testo pulito alla MainActivity per sbloccare la grafica
                         onContenutoFoglioRicevuto?.invoke(stringaOggettoDati)
                     } catch (ex: Exception) {
                         Log.e(TAG, "Errore estrazione testo del foglio: ${ex.message}")
@@ -156,14 +165,23 @@ object ApiService {
     }
 
     fun inviaComandoAlPC(comandoJson: String) {
-        kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+        CoroutineScope(Dispatchers.IO).launch {
             webSocket?.send(comandoJson)
         }
     }
 
-    fun disconnetti() {
-        webSocket?.close(1000, "Chiusura utente")
+    /**
+     * Chiude la linea in modo pulito forzando un testo di spiegazione sulla UI
+     */
+    private fun disconnettiConMessaggio(messaggioUtente: String) {
+        webSocket?.close(1000, "Chiusura controllata")
         webSocket = null
-        scope.launch { onConnessioneStabilità?.invoke(false, "Disconnesso.") }
+        scope.launch {
+            onConnessioneStabilità?.invoke(false, messaggioUtente)
+        }
+    }
+
+    fun disconnetti() {
+        disconnettiConMessaggio("Disconnesso.")
     }
 }

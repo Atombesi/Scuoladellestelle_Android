@@ -35,17 +35,16 @@ fun SchermataOperatore() {
     var fogliList by remember { mutableStateOf(listOf<StructElencofogliJson>()) }
     var selectedId by remember { mutableStateOf<Int?>(null) }
 
-    // 🎯 Memoria di stato per la stringa del singolo foglio ricevuto
+    // Memoria di stato per la stringa del singolo foglio ricevuto
     var jsonFoglioSelezionato by remember { mutableStateOf<String?>(null) }
 
     var showConfermaDialog by remember { mutableStateOf(false) }
     var idDaScaricareTpc by remember { mutableStateOf<Int?>(null) }
 
-    // 🎯 AGGANCIO DEL TUBO RADIO: Lo facciamo una volta sola all'avvio dell'app!
+    // AGGANCIO DEL TUBO RADIO NATIVO
     LaunchedEffect(Unit) {
         ApiService.onContenutoFoglioRicevuto = { jsonRicevuto ->
             if (jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
-                // Il dato è entrato pulito: salviamo il testo e SPEGNIAMO la rotellina!
                 jsonFoglioSelezionato = jsonRicevuto
                 statusMessage = "Foglio pronto per essere compilato."
                 isLoading = false
@@ -91,15 +90,76 @@ fun SchermataOperatore() {
             onDownloadCompletato = { json ->
                 isLoading = false
                 statusMessage = "Foglio pronto per essere compilato."
+                jsonFoglioSelezionato = json
             },
             onErrore = {
                 isLoading = false
                 statusMessage = "Errore nel download del modulo."
+            },
+            onModificaFoglio = { jsonAggiornato ->
+                jsonFoglioSelezionato = jsonAggiornato
             }
         )
 
-        // 3. ZONA BASSA
-        ZonaBassaView()
+        // 3. ZONA BASSA VISIBILE SOLO SE IL FOGLIO È APERTO
+        if (!jsonFoglioSelezionato.isNullOrBlank()) {
+
+            val rootObj = remember(jsonFoglioSelezionato) { org.json.JSONObject(jsonFoglioSelezionato!!) }
+
+            val arrayG = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("VociDiUnFoglio") ?: org.json.JSONArray() }
+            val arrayRT = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("RT") ?: org.json.JSONArray() }
+            val arrayCP = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("CP") ?: org.json.JSONArray() }
+
+            val totaliG = arrayG.length()
+            val compilatiG = (0 until arrayG.length()).map { arrayG.getJSONObject(it) }.count { it.optBoolean("COMPILATO", false) }
+
+            val totaliRT = arrayRT.length()
+            val compilatiRT = (0 until arrayRT.length()).map { arrayRT.getJSONObject(it) }.count { it.optBoolean("COMPILATO", false) || it.optInt("COMPILATO", 0) == 1 }
+
+            val totaliCP = arrayCP.length()
+            val compilatiCP = (0 until arrayCP.length()).map { arrayCP.getJSONObject(it) }.count { it.optBoolean("COMPILATO", false) || it.optInt("COMPILATO", 0) == 1 }
+
+            ZonaBassaView(
+                totaliG = totaliG, compilatiG = compilatiG,
+                totaliRT = totaliRT, compilatiRT = compilatiRT,
+                totaliCP = totaliCP, compilatiCP = compilatiCP,
+                onSaltoCategoria = { categoriaSelezionata ->
+                    // 🎯 MOTORE DI SALTO COMPATTO ED ELEMENTARE:
+                    // Calcoliamo la posizione della prima riga vuota allineandoci alla sequenza unificata (G -> CP -> RT)
+                    when (categoriaSelezionata) {
+                        "GIORNALIERO" -> {
+                            val relativoVuoto = (0 until arrayG.length()).indexOfFirst { !arrayG.getJSONObject(it).optBoolean("COMPILATO", false) }
+                            if (relativoVuoto != -1) {
+                                selectedId = relativoVuoto // Il blocco Giornaliero parte dall'indice 0
+                            }
+                        }
+                        "COMPORTAMENTALE" -> {
+                            val relativoVuoto = (0 until arrayCP.length()).indexOfFirst { !arrayCP.getJSONObject(it).optBoolean("COMPILATO", false) && arrayCP.getJSONObject(it).optInt("COMPILATO", 0) != 1 }
+                            if (relativoVuoto != -1) {
+                                // Parte subito dopo la fine di tutte le Voci del Giornaliero
+                                selectedId = arrayG.length() + relativoVuoto
+                            }
+                        }
+                        "ROUTINE" -> {
+                            val relativoVuoto = (0 until arrayRT.length()).indexOfFirst { !arrayRT.getJSONObject(it).optBoolean("COMPILATO", false) && arrayRT.getJSONObject(it).optInt("COMPILATO", 0) != 1 }
+                            if (relativoVuoto != -1) {
+                                // Parte subito dopo la fine dei blocchi Giornaliero + Comportamentale
+                                selectedId = arrayG.length() + arrayCP.length() + relativoVuoto
+                            }
+                        }
+                    }
+                },
+                onInviaClick = {
+                    val pacchettoDiRitorno = org.json.JSONObject().apply {
+                        put("type", "SALVA_FOGLIO_COMPILATO")
+                        put("id_foglio", rootObj.optInt("ID_Foglio"))
+                        put("dati", rootObj)
+                    }
+                    ApiService.inviaComandoAlPC(pacchettoDiRitorno.toString())
+                    statusMessage = "Dati spinti in rete verso il PC Windows."
+                }
+            )
+        }
     }
 
     if (showConfermaDialog) {

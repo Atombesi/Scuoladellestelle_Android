@@ -23,7 +23,8 @@ fun ZonaCentraleView(
     selectedId: Int?,
     onFoglioSelezionato: (Int) -> Unit,
     onDownloadCompletato: (String) -> Unit,
-    onErrore: () -> Unit
+    onErrore: () -> Unit,
+    onModificaFoglio: (String) -> Unit
 ) {
     // 🎯 STATO LOCALE SICURO: Registra il testo quando il server risponde
     var jsonFoglioContenuto by remember { mutableStateOf<String?>(null) }
@@ -48,8 +49,11 @@ fun ZonaCentraleView(
         if (jsonFoglioContenuto != null) {
             CompilazioneGiornalieroView(
                 jsonGrezzoString = jsonFoglioContenuto!!,
+                indiceSelezionatoEsterno = selectedId ?: 0, // 🎯 PASSA L'INDICE REALE RICEVUTO DALLA MAIN ACTIVITY
                 onSalvaEProcedi = { jsonAggiornato ->
-                    // Gestiremo qui il salvataggio nei prossimi passi
+                    // Aggiorna la variabile locale e la spinge alla MainActivity
+                    jsonFoglioContenuto = jsonAggiornato
+                    onModificaFoglio(jsonAggiornato)
                 }
             )
         }

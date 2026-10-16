@@ -56,11 +56,11 @@ fun ZonaAltaView(
                 )
             }
 
-            // Tutto su una riga compattata per non generare doppie righe verticali
+            // Barra info concentrata su un'unica riga compattata
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text = if (isConnected) "🟢" else "🔴", fontSize = 14.sp)
                 Text(
-                    text = if (isConnected) statusMessage.take(30) else "Non Connesso",
+                    text = if (isConnected) statusMessage.take(35) else "Non Connesso",
                     fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = if (isConnected) Color(0xFF12B76A) else Color(0xFFF04438)
@@ -73,40 +73,32 @@ fun ZonaAltaView(
             }
         }
 
+        // 🎯 RAZIONALIZZAZIONE: Un unico pulsante di interazione con la rete
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
-                    onStartLoading("Autenticazione in corso su SQLite...")
+                    onStartLoading("Connessione ed estrazione elenco in corso...")
+
+                    // Invochiamo la connessione: la cascata automatica farà il resto
                     ApiService.connettiAlServer(
                         context = context,
                         notaUtente = inputNota,
-                        onStatoConnessione = { connesso, messaggio -> onStatusChange(connesso, messaggio, emptyList()) },
-                        onElencoFogli = { listaRicevuta -> onStatusChange(true, "Elenco caricato con successo.", listaRicevuta) },
+                        onStatoConnessione = { connesso, messaggio ->
+                            onStatusChange(connesso, messaggio, emptyList())
+                        },
+                        onElencoFogli = { listaRicevuta ->
+                            onStatusChange(true, "Elenco caricato con successo.", listaRicevuta)
+                        },
                         onFoglioDati = { _ -> }
                     )
                 },
-                modifier = Modifier.height(34.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6B7280)),
+                modifier = Modifier.height(36.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
                 shape = RoundedCornerShape(6.dp),
                 enabled = !isLoading
             ) {
-                Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-            }
-
-            Button(
-                onClick = {
-                    onStartLoading("Richiesta elenco fogli in corso...")
-                    val comandoJson = "{\"type\":\"RICHIEDI_ELENCO\"}"
-                    ApiService.inviaComandoAlPC(comandoJson)
-                },
-                modifier = Modifier.height(34.dp),
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                shape = RoundedCornerShape(6.dp),
-                enabled = isConnected && !isLoading
-            ) {
-                Text("Aggiorna", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
     }

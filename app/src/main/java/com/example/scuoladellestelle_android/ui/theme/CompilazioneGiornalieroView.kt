@@ -29,6 +29,7 @@ data class ElementoUnificato(
 @Composable
 fun CompilazioneGiornalieroView(
     jsonGrezzoString: String,
+    indiceSelezionatoEsterno: Int, // 🎯 NUOVO PARAMETRO: Riceve il comando di salto calcolato dalla MainActivity
     onSalvaEProcedi: (String) -> Unit
 ) {
     val rootJson = remember { JSONObject(jsonGrezzoString) }
@@ -45,6 +46,12 @@ fun CompilazioneGiornalieroView(
     }}
 
     var indiceUnificatoSelezionato by remember { mutableStateOf(0) }
+
+    // 🎯 SVEGLIA REATTIVA: Quando l'utente preme una pillola in basso, la MainActivity cambia indiceSelezionatoEsterno e questo blocco sposta subito l'indice locale!
+    LaunchedEffect(indiceSelezionatoEsterno) {
+        indiceUnificatoSelezionato = indiceSelezionatoEsterno
+    }
+
     val elementoAttivo = if (listaUnificata.isNotEmpty()) listaUnificata[indiceUnificatoSelezionato] else null
 
     Row(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
@@ -85,7 +92,6 @@ fun CompilazioneGiornalieroView(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    // 🎯 DISEGNO DEL PALLINO PERSONALIZZATO: Cerchio vuoto se da fare, pieno con spunta se fatto
                     if (isCompilato) {
                         Box(
                             modifier = Modifier.size(16.dp).background(coloreTema, CircleShape),
@@ -102,7 +108,7 @@ fun CompilazioneGiornalieroView(
                     Text(
                         text = testoVoce.trim(),
                         fontSize = 12.sp,
-                        fontWeight = if (isCorrente) FontWeight.Bold else Modifier.let { FontWeight.Medium },
+                        fontWeight = if (isCorrente) FontWeight.Bold else FontWeight.Medium,
                         color = if (isCorrente) Color(0xFF007AFF) else Color(0xFF344054),
                         modifier = Modifier.weight(1f)
                     )
@@ -167,6 +173,7 @@ fun CompilazioneGiornalieroView(
                                         BoxCasellaFinta(testo = t1Pos, isAttiva = campoAttivoId == 1, errore = t1Errore, modifier = Modifier.weight(1f).clickable { campoAttivoId = 1 })
                                         BoxCasellaFinta(testo = t2Pos, isAttiva = campoAttivoId == 4, errore = t2Errore, modifier = Modifier.weight(1f).clickable { campoAttivoId = 4 })
                                     }
+
                                     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         Text("NEG", modifier = Modifier.width(40.dp), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF344054))
                                         BoxCasellaFinta(testo = t1Neg, isAttiva = campoAttivoId == 2, errore = t1Errore, modifier = Modifier.weight(1f).clickable { campoAttivoId = 2 })
@@ -255,26 +262,25 @@ fun CompilazioneGiornalieroView(
                                                                     voceObj.put("TOT1_POS", t1Pos.toIntOrNull() ?: 0); voceObj.put("TOT1_NEG", t1Neg.toIntOrNull() ?: 0); voceObj.put("TOT1_PROMPT", t1Prp.toIntOrNull() ?: 0); voceObj.put("TOT1", tot1)
                                                                     voceObj.put("TOT2_POS", t2Pos.toIntOrNull() ?: 0); voceObj.put("TOT2_NEG", t2Neg.toIntOrNull() ?: 0); voceObj.put("TOT2_PROMPT", t2Prp.toIntOrNull() ?: 0); voceObj.put("TOT2", tot2)
                                                                     voceObj.put("COMPILATO", true)
+                                                                    onSalvaEProcedi(rootJson.toString())
                                                                     if (indiceUnificatoSelezionato < listaUnificata.size - 1) { indiceUnificatoSelezionato++; campoAttivoId = 1 }
                                                                 }
                                                             }
                                                         } else {
                                                             voceObj.put("TOT", totUnicoSingolo.toIntOrNull() ?: 0)
                                                             voceObj.put("COMPILATO", 1)
+                                                            onSalvaEProcedi(rootJson.toString())
                                                             if (indiceUnificatoSelezionato < listaUnificata.size - 1) { indiceUnificatoSelezionato++ }
                                                         }
                                                     } else {
-// 🎯 INSERIMENTO CIFRE NUMERICHE 0-9 CON CONTROLLO STRINGA RIGIDO
                                                         val testoPulito = if (stringaLavorazione == "0") "" else stringaLavorazione
                                                         if (testoPulito.length < 2) {
                                                             val stringaRisultante = testoPulito + carattereTasto
                                                             if (elementoAttivo.tipo == "G") {
-// Scriviamo fisicamente il numero modificato
                                                                 when (campoAttivoId) {
                                                                     1 -> t1Pos = stringaRisultante 2 -> t1Neg = stringaRisultante 3 -> t1Prp = stringaRisultante
                                                                     4 -> t2Pos = stringaRisultante 5 -> t2Neg = stringaRisultante 6 -> t2Prp = stringaRisultante
                                                                 }
-// 🎯 LA RETTIFICA MATEMATICA: Avanza solo ed esclusivamente se la stringa ha raggiunto 2 caratteri!
                                                                 if (stringaRisultante.length == 2) {
                                                                     val v1 = t1Pos.toIntOrNull() ?: 0
                                                                     val v2 = t1Neg.toIntOrNull() ?: 0
@@ -289,21 +295,21 @@ fun CompilazioneGiornalieroView(
                                                                     if (campoAttivoId < 6) {
                                                                         campoAttivoId++
                                                                     } else {
-// Fine riga Giornaliero
                                                                         if (!e1 && !e2) {
                                                                             voceObj.put("TOT1_POS", v1); voceObj.put("TOT1_NEG", v2); voceObj.put("TOT1_PROMPT", v3); voceObj.put("TOT1", ct1)
                                                                             voceObj.put("TOT2_POS", v4); voceObj.put("TOT2_NEG", v5); voceObj.put("TOT2_PROMPT", v6); voceObj.put("TOT2", ct2)
                                                                             voceObj.put("COMPILATO", true)
+                                                                            onSalvaEProcedi(rootJson.toString())
                                                                             if (indiceUnificatoSelezionato < listaUnificata.size - 1) { indiceUnificatoSelezionato++; campoAttivoId = 1 }
                                                                         }
                                                                     }
                                                                 }
                                                             } else {
-// Per CP e Routine (Campo singolo)
                                                                 totUnicoSingolo = stringaRisultante
                                                                 if (stringaRisultante.length == 2) {
                                                                     voceObj.put("TOT", stringaRisultante.toIntOrNull() ?: 0)
                                                                     voceObj.put("COMPILATO", 1)
+                                                                    onSalvaEProcedi(rootJson.toString())
                                                                     if (indiceUnificatoSelezionato < listaUnificata.size - 1) { indiceUnificatoSelezionato++ }
                                                                 }
                                                             }
@@ -319,14 +325,6 @@ fun CompilazioneGiornalieroView(
                             }
                         }
                     }
-                }
-                Button(
-                    onClick = { onSalvaEProcedi(rootJson.toString()) },
-                    modifier = Modifier.fillMaxWidth().padding(top = 6.dp).height(36.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF344054)),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Text("Salva ed Invia File Completo al PC ➔", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
         }
@@ -356,4 +354,3 @@ fun BoxCasellaFinta(testo: String, isAttiva: Boolean, errore: Boolean, modifier:
         )
     }
 }
-
