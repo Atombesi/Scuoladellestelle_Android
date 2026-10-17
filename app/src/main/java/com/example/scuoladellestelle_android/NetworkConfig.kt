@@ -5,7 +5,7 @@ package com.example.scuoladellestelle_android
  * All'avvio dell'app vengono sovrascritti con i valori reali salvati in memoria.
  */
 object NetworkConfig {
-    var IP_PC: String = "192.168.68.57"  // Valore iniziale di fallback
+    var IP_PC: String = "192.168.68.52"  // Valore iniziale di fallback
     var PORTA_PC: String = "8080"        // Valore iniziale di fallback
 
     /**

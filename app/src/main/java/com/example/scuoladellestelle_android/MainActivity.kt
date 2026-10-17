@@ -41,13 +41,37 @@ fun SchermataOperatore() {
     var showConfermaDialog by remember { mutableStateOf(false) }
     var idDaScaricareTpc by remember { mutableStateOf<Int?>(null) }
 
-    // AGGANCIO DEL TUBO RADIO NATIVO
+    // ID del Tablet configurato per la sincronizzazione con l'anagrafica VB.NET
+    val dispositivoHardwareId = "TABLET_01"
+
+    // AGGANCIO DEL TUBO RADIO NATIVO: Lo facciamo una volta sola all'avvio dell'app!
     LaunchedEffect(Unit) {
         ApiService.onContenutoFoglioRicevuto = { jsonRicevuto ->
             if (jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
                 jsonFoglioSelezionato = jsonRicevuto
                 statusMessage = "Foglio pronto per essere compilato."
                 isLoading = false
+
+                // HANDSHAKE AUTOMATICO (Opzione A): Invio notifica strutturata con spaziature pulite
+                try {
+                    val root = org.json.JSONObject(jsonRicevuto)
+                    var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
+                    if (idQuestionarioEstratto == 0) {
+                        idQuestionarioEstratto = root.optInt("ID_questionario", 0)
+                    }
+
+                    if (idQuestionarioEstratto > 0) {
+                        val pacchettoConferma = org.json.JSONObject().apply {
+                            put("type", "CONFERMA_RICEZIONE_FOGLIO")
+                            put("id_questionario", idQuestionarioEstratto)
+                            put("device_id", dispositivoHardwareId)
+                        }
+                        ApiService.inviaComandoAlPC(pacchettoConferma.toString())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
             } else {
                 isLoading = false
                 statusMessage = "Errore nel download del modulo."
@@ -91,6 +115,26 @@ fun SchermataOperatore() {
                 isLoading = false
                 statusMessage = "Foglio pronto per essere compilato."
                 jsonFoglioSelezionato = json
+
+                // COPERTURA DI SICUREZZA: Invio notifica nel callback con spaziature pulite
+                try {
+                    val root = org.json.JSONObject(json)
+                    var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
+                    if (idQuestionarioEstratto == 0) {
+                        idQuestionarioEstratto = root.optInt("ID_questionario", 0)
+                    }
+
+                    if (idQuestionarioEstratto > 0) {
+                        val pacchettoConferma = org.json.JSONObject().apply {
+                            put("type", "CONFERMA_RICEZIONE_FOGLIO")
+                            put("id_questionario", idQuestionarioEstratto)
+                            put("device_id", dispositivoHardwareId)
+                        }
+                        ApiService.inviaComandoAlPC(pacchettoConferma.toString())
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             },
             onErrore = {
                 isLoading = false
@@ -124,26 +168,22 @@ fun SchermataOperatore() {
                 totaliRT = totaliRT, compilatiRT = compilatiRT,
                 totaliCP = totaliCP, compilatiCP = compilatiCP,
                 onSaltoCategoria = { categoriaSelezionata ->
-                    // 🎯 MOTORE DI SALTO COMPATTO ED ELEMENTARE:
-                    // Calcoliamo la posizione della prima riga vuota allineandoci alla sequenza unificata (G -> CP -> RT)
                     when (categoriaSelezionata) {
                         "GIORNALIERO" -> {
                             val relativoVuoto = (0 until arrayG.length()).indexOfFirst { !arrayG.getJSONObject(it).optBoolean("COMPILATO", false) }
                             if (relativoVuoto != -1) {
-                                selectedId = relativoVuoto // Il blocco Giornaliero parte dall'indice 0
+                                selectedId = relativoVuoto
                             }
                         }
                         "COMPORTAMENTALE" -> {
                             val relativoVuoto = (0 until arrayCP.length()).indexOfFirst { !arrayCP.getJSONObject(it).optBoolean("COMPILATO", false) && arrayCP.getJSONObject(it).optInt("COMPILATO", 0) != 1 }
                             if (relativoVuoto != -1) {
-                                // Parte subito dopo la fine di tutte le Voci del Giornaliero
                                 selectedId = arrayG.length() + relativoVuoto
                             }
                         }
                         "ROUTINE" -> {
                             val relativoVuoto = (0 until arrayRT.length()).indexOfFirst { !arrayRT.getJSONObject(it).optBoolean("COMPILATO", false) && arrayRT.getJSONObject(it).optInt("COMPILATO", 0) != 1 }
                             if (relativoVuoto != -1) {
-                                // Parte subito dopo la fine dei blocchi Giornaliero + Comportamentale
                                 selectedId = arrayG.length() + arrayCP.length() + relativoVuoto
                             }
                         }
@@ -175,8 +215,8 @@ fun SchermataOperatore() {
                             selectedId = id
                             isLoading = true
                             statusMessage = "Richiesta file JSON in corso..."
-
-                            val comandoFoglioJson = "{\"type\":\"RICHIEDI_FOGLIO\",\"id_questionario\":$id}"
+// 🎯 CORRETTO QUI: Usiamo la sintassi nativa a tre doppi apici per eliminare i conflitti di escape
+                            val comandoFoglioJson = """{"type":"RICHIEDI_FOGLIO","id_questionario":$id}"""
                             ApiService.inviaComandoAlPC(comandoFoglioJson)
                         }
                     }

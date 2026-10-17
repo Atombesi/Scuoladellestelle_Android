@@ -3,6 +3,7 @@ package com.example.scuoladellestelle_android
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -57,7 +58,33 @@ fun ZonaAltaView(
             }
 
             // Barra info concentrata su un'unica riga compattata
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                // 🎯 MODIFICA RICONNESIONE SILENZIOSA: Se tocchi il pallino rosso, l'applicazione
+                // riapre il tubo WebSocket facendo l'handshake, ma passa richiedeLista = false.
+                // In questo modo il tunnel radio torna verde in background senza azzerare la griglia o il foglio aperto!
+                modifier = Modifier
+                    .clickable(enabled = !isLoading) {
+                        if (!isConnected) {
+                            onStartLoading("Ripristino canale radio in corso...")
+                            ApiService.connettiAlServer(
+                                context = context,
+                                notaUtente = inputNota,
+                                richiedeLista = false, // 🎯 FORZA IL RECUPERO SENZA CHIEDERE L'ELENCO
+                                onStatoConnessione = { connesso, messaggio ->
+                                    onStatusChange(connesso, messaggio, emptyList())
+                                },
+                                onElencoFogli = { _ -> },
+                                onFoglioDati = { _ -> }
+                            )
+                        } else {
+                            // Se era già connesso, esegue il normale ping di controllo
+                            ApiService.eseguiPingDiVerifica()
+                        }
+                    }
+                    .padding(vertical = 4.dp, horizontal = 2.dp)
+            ) {
                 Text(text = if (isConnected) "🟢" else "🔴", fontSize = 14.sp)
                 Text(
                     text = if (isConnected) statusMessage.take(35) else "Non Connesso",
@@ -73,16 +100,16 @@ fun ZonaAltaView(
             }
         }
 
-        // 🎯 RAZIONALIZZAZIONE: Un unico pulsante di interazione con la rete
+        // 🎯 IL PULSANTE DI CONNETTI GENERALE: Mantiene il comportamento pulito standard (richiede l'elenco da zero)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
                 onClick = {
                     onStartLoading("Connessione ed estrazione elenco in corso...")
 
-                    // Invochiamo la connessione: la cascata automatica farà il resto
                     ApiService.connettiAlServer(
                         context = context,
                         notaUtente = inputNota,
+                        richiedeLista = true, // 🎯 SCARICA L'ELENCO COMPLETO DA ZERO
                         onStatoConnessione = { connesso, messaggio ->
                             onStatusChange(connesso, messaggio, emptyList())
                         },
