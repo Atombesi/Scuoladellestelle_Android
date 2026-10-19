@@ -71,7 +71,7 @@ fun ZonaAltaView(
                             ApiService.connettiAlServer(
                                 context = context,
                                 notaUtente = inputNota,
-                                richiedeLista = false, // 🎯 FORZA IL RECUPERO SENZA CHIEDERE L'ELENCO
+                             //   richiedeLista = false, // 🎯 FORZA IL RECUPERO SENZA CHIEDERE L'ELENCO
                                 onStatoConnessione = { connesso, messaggio ->
                                     onStatusChange(connesso, messaggio, emptyList())
                                 },
@@ -109,7 +109,7 @@ fun ZonaAltaView(
                     ApiService.connettiAlServer(
                         context = context,
                         notaUtente = inputNota,
-                        richiedeLista = true, // 🎯 SCARICA L'ELENCO COMPLETO DA ZERO
+                       // richiedeLista = true, // 🎯 SCARICA L'ELENCO COMPLETO DA ZERO
                         onStatoConnessione = { connesso, messaggio ->
                             onStatusChange(connesso, messaggio, emptyList())
                         },

@@ -27,14 +27,11 @@ object ApiService {
 
     private var webSocket: WebSocket? = null
 
-    // Bandiera di controllo hardware per il Timeout di sicurezza
+    // 🎯 Bandiera di controllo hardware per il Timeout di sicurezza
     private var elencoGiaArrivato = false
 
-    // Memoria volatile per conservare l'ID hardware durante la sessione attiva
+    // 🎯 Memoria volatile per conservare l'ID hardware durante la sessione attiva
     private var idDispositivoSessione = "unknown_tablet"
-
-    // 🎯 VARIABILE DI CONSERVAZIONE: Dice al socket se dopo l'handshake deve chiedere l'elenco o stare zitto
-    private var deveRichiedereElencoFogli = true
 
     var onConnessioneStabilità: ((Boolean, String) -> Unit)? = null
     var onElencoRicevuto: ((List<StructElencofogliJson>) -> Unit)? = null
@@ -42,28 +39,25 @@ object ApiService {
 
     /**
      * 🌐 CONNETTI, EFFETTUA HANDSHAKE E RICHIEDI ELENCO IN AUTOMATICO
-     * Aggiunto il parametro richiedeLista (default = true) per gestire i riagganci silenziosi.
      */
     @SuppressLint("HardwareIds")
     fun connettiAlServer(
         context: Context,
         notaUtente: String,
-        richiedeLista: Boolean = true, // 🎯 DEFAULT TRUE PER IL COMPORTAMENTO STANDARD
         onStatoConnessione: (Boolean, String) -> Unit,
         onElencoFogli: (List<StructElencofogliJson>) -> Unit,
         onFoglioDati: (String) -> Unit
     ) {
         this.onConnessioneStabilità = onStatoConnessione
         this.onElencoRicevuto = onElencoFogli
-        this.deveRichiedereElencoFogli = richiedeLista
 
         webSocket?.close(1000, "Reset")
         webSocket = null
 
-        // Se stiamo facendo solo un riaggancio di rete, consideriamo l'elenco già al sicuro
-        elencoGiaArrivato = !richiedeLista
+        // Resettiamo la bandiera all'inizio di ogni tentativo di connessione
+        elencoGiaArrivato = false
 
-        // Estrazione e memorizzazione immediata dell'ID hardware reale del tablet
+        // 🎯 Estrazione e memorizzazione immediata dell'ID hardware reale del tablet
         idDispositivoSessione = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown_tablet"
 
         val urlWebSocket = NetworkConfig.BASE_URL.replace("http://", "ws://")
@@ -100,14 +94,12 @@ object ApiService {
             }
         })
 
-        // TIMER DI TIMEOUT DI SICUREZZA (Attivo solo se si sta scaricando la lista iniziale)
-        if (richiedeLista) {
-            scope.launch {
-                delay(8000)
-                if (!elencoGiaArrivato) {
-                    Log.e(TAG, "⏳ TIMEOUT! Il server VB.NET non ha risposto entro 8 secondi.")
-                    disconnettiConMessaggio("Il server non risponde alla richiesta. Riprova.")
-                }
+        // TIMER DI TIMEOUT DI SICUREZZA (8 Secondi)
+        scope.launch {
+            delay(8000)
+            if (!elencoGiaArrivato) {
+                Log.e(TAG, "⏳ TIMEOUT! Il server VB.NET non ha risposto entro 8 secondi.")
+                disconnettiConMessaggio("Il server non risponde alla richiesta. Riprova.")
             }
         }
     }
@@ -121,17 +113,13 @@ object ApiService {
                     val nomeAssegnato = json.optString("nome_dispositivo", "Tablet Registrato")
                     onConnessioneStabilità?.invoke(true, "Connesso: $nomeAssegnato")
 
-                    // 🎯 CONTROLLO CONDIZIONALE: Chiediamo l'elenco dei fogli solo se non abbiamo un lavoro aperto a schermo!
-                    if (deveRichiedereElencoFogli) {
-                        Log.d(TAG, "🚀 Handshake Approvato. Richiedo l'elenco fogli...")
-                        val comandoConElencoEId = JSONObject().apply {
-                            put("type", "RICHIEDI_ELENCO")
-                            put("device_id", idDispositivoSessione)
-                        }
-                        webSocket?.send(comandoConElencoEId.toString())
-                    } else {
-                        Log.d(TAG, "🎯 RE-CONNESSIONE SILENZIOSA COMPLETATA: Canale radio ripristinato senza toccare lo schermo.")
+                    // 🎯 LA MODIFICA: Componiamo un JSON strutturato inserendo sia il type sia l'id hardware reale del tablet!
+                    Log.d(TAG, "🚀 Handshake Approvato. Richiedo l'elenco fogli trasmettendo l'ID hardware...")
+                    val comandoConElencoEId = JSONObject().apply {
+                        put("type", "RICHIEDI_ELENCO")
+                        put("device_id", idDispositivoSessione)
                     }
+                    webSocket?.send(comandoConElencoEId.toString())
                 }
 
                 "HANDSHAKE_PENDING" -> {
@@ -145,6 +133,7 @@ object ApiService {
                 }
 
                 "ELENCO_FOGLI_RISPOSTA" -> {
+                    // OBIETTIVO RAGGIUNTO: I dati dell'elenco sono entrati! Disattiviamo il Timeout
                     elencoGiaArrivato = true
 
                     val datiArray = json.getJSONArray("dati")
@@ -200,7 +189,6 @@ object ApiService {
             onConnessioneStabilità?.invoke(false, messaggioUtente)
         }
     }
-
     fun eseguiPingDiVerifica() {
         val pacchettoPing = JSONObject().apply {
             put("type", "PING_VERIFICA")
