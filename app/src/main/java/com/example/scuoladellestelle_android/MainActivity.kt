@@ -15,6 +15,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.sp
+import org.json.JSONArray
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -47,21 +49,21 @@ fun SchermataOperatore() {
     // AGGANCIO DEL TUBO RADIO NATIVO: Lo facciamo una volta sola all'avvio dell'app!
     LaunchedEffect(Unit) {
         ApiService.onContenutoFoglioRicevuto = { jsonRicevuto ->
-            if (jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
+            if (jsonRicevuto != null && jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
                 jsonFoglioSelezionato = jsonRicevuto
                 statusMessage = "Foglio pronto per essere compilato."
                 isLoading = false
 
                 // HANDSHAKE AUTOMATICO (Opzione A): Invio notifica strutturata con spaziature pulite
                 try {
-                    val root = org.json.JSONObject(jsonRicevuto)
+                    val root = JSONObject(jsonRicevuto)
                     var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
                     if (idQuestionarioEstratto == 0) {
                         idQuestionarioEstratto = root.optInt("ID_questionario", 0)
                     }
 
                     if (idQuestionarioEstratto > 0) {
-                        val pacchettoConferma = org.json.JSONObject().apply {
+                        val pacchettoConferma = JSONObject().apply {
                             put("type", "CONFERMA_RICEZIONE_FOGLIO")
                             put("id_questionario", idQuestionarioEstratto)
                             put("device_id", dispositivoHardwareId)
@@ -86,11 +88,11 @@ fun SchermataOperatore() {
             isConnected = isConnected,
             isLoading = isLoading,
             statusMessage = statusMessage,
-            onStartLoading = { messaggio ->
+            onStartLoading = { messaggio: String ->
                 isLoading = true
                 statusMessage = messaggio
             },
-            onStatusChange = { connesso, messaggio, lista ->
+            onStatusChange = { connesso: Boolean, messaggio: String, lista: List<StructElencofogliJson> ->
                 isConnected = connesso
                 statusMessage = messaggio
                 if (lista.isNotEmpty() || !connesso) {
@@ -107,40 +109,28 @@ fun SchermataOperatore() {
             isLoading = isLoading,
             fogliList = fogliList,
             selectedId = selectedId,
-            onFoglioSelezionato = { id ->
+            onFoglioSelezionato = { id: Int ->
                 idDaScaricareTpc = id
                 showConfermaDialog = true
             },
-            onDownloadCompletato = { json ->
+            onDownloadCompletato = { json: String ->
                 isLoading = false
-                statusMessage = "Foglio pronto per essere compilato."
-                jsonFoglioSelezionato = json
 
-                // COPERTURA DI SICUREZZA: Invio notifica nel callback con spaziature pulite
-                try {
-                    val root = org.json.JSONObject(json)
-                    var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
-                    if (idQuestionarioEstratto == 0) {
-                        idQuestionarioEstratto = root.optInt("ID_questionario", 0)
-                    }
-
-                    if (idQuestionarioEstratto > 0) {
-                        val pacchettoConferma = org.json.JSONObject().apply {
-                            put("type", "CONFERMA_RICEZIONE_FOGLIO")
-                            put("id_questionario", idQuestionarioEstratto)
-                            put("device_id", dispositivoHardwareId)
-                        }
-                        ApiService.inviaComandoAlPC(pacchettoConferma.toString())
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                // 🎯 L'INTERVENTO CHIRURGICO SUL CICLO DEI MESSAGGI:
+                // Se la ZonaCentrale intercetta la stringa di conferma dal server PC...
+                if (json == "OK_SALVATO") {
+                    jsonFoglioSelezionato = null // Svuota lo stato principale per chiudere la Zona Bassa
+                    statusMessage = "Foglio registrato sul PC Windows con successo!"
+                } else {
+                    statusMessage = "Foglio pronto per essere compilato."
+                    jsonFoglioSelezionato = json
                 }
             },
             onErrore = {
                 isLoading = false
                 statusMessage = "Errore nel download del modulo."
             },
-            onModificaFoglio = { jsonAggiornato ->
+            onModificaFoglio = { jsonAggiornato: String ->
                 jsonFoglioSelezionato = jsonAggiornato
             }
         )
@@ -148,11 +138,11 @@ fun SchermataOperatore() {
         // 3. ZONA BASSA VISIBILE SOLO SE IL FOGLIO È APERTO
         if (!jsonFoglioSelezionato.isNullOrBlank()) {
 
-            val rootObj = remember(jsonFoglioSelezionato) { org.json.JSONObject(jsonFoglioSelezionato!!) }
+            val rootObj = remember(jsonFoglioSelezionato) { JSONObject(jsonFoglioSelezionato!!) }
 
-            val arrayG = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("VociDiUnFoglio") ?: org.json.JSONArray() }
-            val arrayRT = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("RT") ?: org.json.JSONArray() }
-            val arrayCP = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("CP") ?: org.json.JSONArray() }
+            val arrayG = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("VociDiUnFoglio") ?: JSONArray() }
+            val arrayRT = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("RT") ?: JSONArray() }
+            val arrayCP = remember(jsonFoglioSelezionato) { rootObj.optJSONArray("CP") ?: JSONArray() }
 
             val totaliG = arrayG.length()
             val compilatiG = (0 until arrayG.length()).map { arrayG.getJSONObject(it) }.count { it.optBoolean("COMPILATO", false) }
@@ -167,7 +157,7 @@ fun SchermataOperatore() {
                 totaliG = totaliG, compilatiG = compilatiG,
                 totaliRT = totaliRT, compilatiRT = compilatiRT,
                 totaliCP = totaliCP, compilatiCP = compilatiCP,
-                onSaltoCategoria = { categoriaSelezionata ->
+                onSaltoCategoria = { categoriaSelezionata: String ->
                     when (categoriaSelezionata) {
                         "GIORNALIERO" -> {
                             val relativoVuoto = (0 until arrayG.length()).indexOfFirst { !arrayG.getJSONObject(it).optBoolean("COMPILATO", false) }
@@ -190,7 +180,7 @@ fun SchermataOperatore() {
                     }
                 },
                 onInviaClick = {
-                    val pacchettoDiRitorno = org.json.JSONObject().apply {
+                    val pacchettoDiRitorno = JSONObject().apply {
                         put("type", "SALVA_FOGLIO_COMPILATO")
                         put("id_foglio", rootObj.optInt("ID_Foglio"))
                         put("dati", rootObj)
@@ -215,7 +205,6 @@ fun SchermataOperatore() {
                             selectedId = id
                             isLoading = true
                             statusMessage = "Richiesta file JSON in corso..."
-// 🎯 CORRETTO QUI: Usiamo la sintassi nativa a tre doppi apici per eliminare i conflitti di escape
                             val comandoFoglioJson = """{"type":"RICHIEDI_FOGLIO","id_questionario":$id}"""
                             ApiService.inviaComandoAlPC(comandoFoglioJson)
                         }
@@ -226,6 +215,7 @@ fun SchermataOperatore() {
             },
             dismissButton = {
                 TextButton(onClick = { showConfermaDialog = false }) {
+
                     Text("Annulla", color = Color(0xFF475467))
                 }
             }

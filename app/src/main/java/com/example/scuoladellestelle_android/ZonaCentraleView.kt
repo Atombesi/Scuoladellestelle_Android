@@ -28,38 +28,45 @@ fun ZonaCentraleView(
     onErrore: () -> Unit,
     onModificaFoglio: (String) -> Unit
 ) {
-    // STATO LOCALE SICURO: Registra il testo quando il server risponde
+    // STATO LOCALE: Registra il testo quando il server risponde
     var jsonFoglioContenuto by remember { mutableStateOf<String?>(null) }
 
-    // 🎯 RECUPERO ID HARDWARE REALE: Estraiamo il contesto di sistema Android per leggere l'ID univoco nativo della macchina
+    // RECUPERO ID HARDWARE REALE
     val contestoAndroid = LocalContext.current
     val dispositivoHardwareId = remember(contestoAndroid) {
         Settings.Secure.getString(contestoAndroid.contentResolver, Settings.Secure.ANDROID_ID) ?: "ATTREZZO_SCONOSCIUTO"
     }
 
-    // Aggancio diretto e nativo senza Reflection o rischi di Deoptimization
+    // Aggancio del listener di rete allineato all'interno dello scope dei parametri
     LaunchedEffect(Unit) {
         ApiService.onContenutoFoglioRicevuto = { jsonRicevuto ->
-            if (jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
-                jsonFoglioContenuto = jsonRicevuto
-                onDownloadCompletato(jsonRicevuto)
+            if (jsonRicevuto != null && jsonRicevuto != "ERRORE" && jsonRicevuto.isNotBlank()) {
 
-                // 🎯 HANDSHAKE DI RICEZIONE DIRETTO: Visto che il segnale radio si ferma qui,
-                // estraiamo l'ID ed inviamo subito la conferma "CONFERMA_RICEZIONE_FOGLIO" al server PC!
+                // INTERCETTAZIONE CONFERMA: Se contiene la conferma di salvataggio da Windows
+                if (jsonRicevuto.contains("OK_SALVATO")) {
+                    jsonFoglioContenuto = null // Azzera lo stato locale chiudendo la vista di compilazione
+                    onDownloadCompletato("OK_SALVATO") // Spinge il segnale di reset verso la MainActivity
+                } else {
+                    jsonFoglioContenuto = jsonRicevuto
+                    onDownloadCompletato(jsonRicevuto)
+                }
+
                 try {
-                    val root = org.json.JSONObject(jsonRicevuto)
-                    var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
-                    if (idQuestionarioEstratto == 0) {
-                        idQuestionarioEstratto = root.optInt("ID_questionario", 0)
-                    }
-
-                    if (idQuestionarioEstratto > 0) {
-                        val pacchettoConferma = org.json.JSONObject().apply {
-                            put("type", "CONFERMA_RICEZIONE_FOGLIO")
-                            put("id_questionario", idQuestionarioEstratto)
-                            put("device_id", dispositivoHardwareId) // 🎯 ORA PASSA L'ID REALE (es. 88f56786c3d478df)
+                    if (!jsonRicevuto.contains("OK_SALVATO")) {
+                        val root = org.json.JSONObject(jsonRicevuto)
+                        var idQuestionarioEstratto = root.optInt("ID_Questionario", 0)
+                        if (idQuestionarioEstratto == 0) {
+                            idQuestionarioEstratto = root.optInt("ID_questionario", 0)
                         }
-                        ApiService.inviaComandoAlPC(pacchettoConferma.toString())
+
+                        if (idQuestionarioEstratto > 0) {
+                            val pacchettoConferma = org.json.JSONObject().apply {
+                                put("type", "CONFERMA_RICEZIONE_FOGLIO")
+                                put("id_questionario", idQuestionarioEstratto)
+                                put("device_id", dispositivoHardwareId)
+                            }
+                            ApiService.inviaComandoAlPC(pacchettoConferma.toString())
+                        }
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
@@ -75,20 +82,17 @@ fun ZonaCentraleView(
         modifier = modifier.padding(20.dp),
         contentAlignment = Alignment.Center
     ) {
-        // 🌐 CASO A: Il file del foglio è in memoria -> Schermo diviso 40/60
         if (jsonFoglioContenuto != null) {
             CompilazioneGiornalieroView(
                 jsonGrezzoString = jsonFoglioContenuto!!,
+                // 🎯 FIX DEFINITIVO: Ripristinato il nome del parametro corretto atteso dal tuo modulo
                 indiceSelezionatoEsterno = selectedId ?: 0,
                 onSalvaEProcedi = { jsonAggiornato ->
-                    // Aggiorna la variabile locale e la spinge alla MainActivity
                     jsonFoglioContenuto = jsonAggiornato
                     onModificaFoglio(jsonAggiornato)
                 }
             )
-        }
-        // 🌐 CASO B: Griglia classica dei bambini selezionabili
-        else {
+        } else {
             Card(
                 modifier = Modifier.fillMaxSize(),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
