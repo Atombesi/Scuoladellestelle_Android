@@ -30,10 +30,22 @@ fun ZonaAltaView(
     val prefs = remember { context.getSharedPreferences("config_rete", Context.MODE_PRIVATE) }
     var showDialog by remember { mutableStateOf(false) }
 
-    var inputIp by remember { mutableStateOf(prefs.getString("ip_pc", NetworkConfig.IP_PC) ?: NetworkConfig.IP_PC) }
-    var inputPorta by remember { mutableStateOf(prefs.getString("porta_pc", NetworkConfig.PORTA_PC) ?: NetworkConfig.PORTA_PC) }
+    // Carichiamo immediatamente i valori reali salvati su disco
+    val ipSalvato = prefs.getString("ip_pc", NetworkConfig.IP_PC) ?: NetworkConfig.IP_PC
+    val portaSalvata = prefs.getString("porta_pc", NetworkConfig.PORTA_PC) ?: NetworkConfig.PORTA_PC
+
+    var inputIp by remember { mutableStateOf(ipSalvato) }
+    var inputPorta by remember { mutableStateOf(portaSalvata) }
     var inputNota by remember { mutableStateOf(prefs.getString("nota_utente", "Tablet Aula 1") ?: "Tablet Aula 1") }
 
+    // 🎯 INTERVENTO CHIRURGICO: Forza la sovrascrittura di NetworkConfig all'avvio istantaneo del componente
+    LaunchedEffect(Unit) {
+        NetworkConfig.IP_PC = ipSalvato
+        NetworkConfig.PORTA_PC = portaSalvata
+        // Sincronizza le variabili di stato per forzare il ridisegno immediato della label
+        inputIp = ipSalvato
+        inputPorta = portaSalvata
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -92,8 +104,14 @@ fun ZonaAltaView(
                     fontWeight = FontWeight.SemiBold,
                     color = if (isConnected) Color(0xFF12B76A) else Color(0xFFF04438)
                 )
+
+                // Text(
+                //    text = "(${NetworkConfig.IP_PC})",
+                //    fontSize = 11.sp,
+                //    color = Color(0xFF98A2B3)
+                //)
                 Text(
-                    text = "(${NetworkConfig.IP_PC})",
+                    text = "($inputIp)", // 🎯 LEGGE LO STATO REATTIVO LOCALE
                     fontSize = 11.sp,
                     color = Color(0xFF98A2B3)
                 )

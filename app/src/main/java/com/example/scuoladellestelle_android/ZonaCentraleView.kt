@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.scuoladellestelle_android.ui.theme.CompilazioneGiornalieroView
 
 @Composable
 fun ZonaCentraleView(
@@ -87,7 +88,7 @@ fun ZonaCentraleView(
                 jsonGrezzoString = jsonFoglioContenuto!!,
                 // 🎯 FIX DEFINITIVO: Ripristinato il nome del parametro corretto atteso dal tuo modulo
                 indiceSelezionatoEsterno = selectedId ?: 0,
-                onSalvaEProcedi = { jsonAggiornato ->
+                onSalvaEProcedi = { jsonAggiornato: String ->
                     jsonFoglioContenuto = jsonAggiornato
                     onModificaFoglio(jsonAggiornato)
                 }
