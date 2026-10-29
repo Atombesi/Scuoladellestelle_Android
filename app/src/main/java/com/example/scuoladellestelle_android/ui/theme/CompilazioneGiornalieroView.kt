@@ -106,6 +106,46 @@ fun CompilazioneGiornalieroView(
                     } else {
                         Box(modifier = Modifier.size(16.dp).border(2.dp, coloreTema, CircleShape))
                     }
+                    // =======================================================================
+                    // 2. INSERISCI QUESTO BLOCCO QUI: BADGE COMPARIRE IN ROSSO SOLO DOPO INSERIMENTO
+                    // =======================================================================
+                    val stringaStatoRisposta = when (elem.tipo) {
+                        "G" -> {
+                            val v1 = voceObj.optInt("TOT1", 0)
+                            val v2 = voceObj.optInt("TOT2", 0)
+                            when {
+                                v1 > 0 && v2 > 0 -> "[$v1-$v2]" // Entrambi presenti
+                                v1 > 0 -> "$v1"                 // Solo primo presente
+                                v2 > 0 -> "$v2"                 // Solo secondo presente
+                                else -> ""                      // Stringa vuota: Invisibile all'avvio!
+                            }
+                        }
+                        "RT" -> {
+                            if (isCompilato) {
+                                if (voceObj.optInt("TOT", 0) == 1) "[SÌ]" else "[NO]"
+                            } else ""
+                        }
+                        "CP" -> {
+                            val freq = voceObj.optInt("TOT", 0)
+                            if (freq > 0 || isCompilato) "[$freq]" else ""
+                        }
+                        else -> ""
+                    }
+
+                    if (stringaStatoRisposta.isNotBlank()) {
+                        Text(
+                            text = stringaStatoRisposta,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = when (elem.tipo) {
+                                "RT" -> if (stringaStatoRisposta == "[SÌ]") Color(0xFF12B76A) else Color(0xFFF04438)
+                                else -> Color(0xFFF04438) // Sempre Rosso per Giornalieri e Comportamentali
+                            },
+                            modifier = Modifier.padding(end = 6.dp)
+                        )
+                    }
+                    // =======================================================================
+
                     Text(text = testoVoce.trim(), fontSize = 12.sp, fontWeight = if (isCorrente) FontWeight.Bold else FontWeight.Medium, color = if (isCorrente) Color(0xFF007AFF) else Color(0xFF344054), modifier = Modifier.weight(1f))
                 }
             }

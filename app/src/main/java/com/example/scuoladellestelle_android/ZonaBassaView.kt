@@ -63,7 +63,8 @@ fun ZonaBassaView(
             colors = ButtonDefaults.buttonColors(
                 containerColor = if (tuttoCompleto) Color(0xFF12B76A) else Color(0xFF6B7280)
             ),
-            shape = RoundedCornerShape(6.dp)
+            shape = RoundedCornerShape(6.dp),
+            enabled = tuttoCompleto // 🎯 DISABILITA IL CLICK SE IL FOGLIO NON È INTERAMENTE COMPILATO
         ) {
             Text(
                 text = if (tuttoCompleto) "Invia Dati al PC ➔" else "Salva Sessione",
