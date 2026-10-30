@@ -5,8 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,8 +29,8 @@ fun ZonaAltaView(
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("config_rete", Context.MODE_PRIVATE) }
     var showDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
-    // Carichiamo immediatamente i valori reali salvati su disco
     val ipSalvato = prefs.getString("ip_pc", NetworkConfig.IP_PC) ?: NetworkConfig.IP_PC
     val portaSalvata = prefs.getString("porta_pc", NetworkConfig.PORTA_PC) ?: NetworkConfig.PORTA_PC
 
@@ -38,18 +38,17 @@ fun ZonaAltaView(
     var inputPorta by remember { mutableStateOf(portaSalvata) }
     var inputNota by remember { mutableStateOf(prefs.getString("nota_utente", "Tablet Aula 1") ?: "Tablet Aula 1") }
 
-    // 🎯 INTERVENTO CHIRURGICO: Forza la sovrascrittura di NetworkConfig all'avvio istantaneo del componente
     LaunchedEffect(Unit) {
         NetworkConfig.IP_PC = ipSalvato
         NetworkConfig.PORTA_PC = portaSalvata
-        // Sincronizza le variabili di stato per forzare il ridisegno immediato della label
         inputIp = ipSalvato
         inputPorta = portaSalvata
     }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(55.dp) // 🎯 ALTEZZA DIMEZZATA FISSA E PERMANENTE
+            .height(55.dp)
             .background(Color.White)
             .border(1.dp, Color(0xFFE4E7EC))
             .padding(horizontal = 12.dp, vertical = 4.dp),
@@ -69,31 +68,12 @@ fun ZonaAltaView(
                 )
             }
 
-            // Barra info concentrata su un'unica riga compattata
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
-                // 🎯 MODIFICA RICONNESIONE SILENZIOSA: Se tocchi il pallino rosso, l'applicazione
-                // riapre il tubo WebSocket facendo l'handshake, ma passa richiedeLista = false.
-                // In questo modo il tunnel radio torna verde in background senza azzerare la griglia o il foglio aperto!
                 modifier = Modifier
                     .clickable(enabled = !isLoading) {
-                        if (!isConnected) {
-                            onStartLoading("Ripristino canale radio in corso...")
-                            ApiService.connettiAlServer(
-                                context = context,
-                                notaUtente = inputNota,
-                             //   richiedeLista = false, // 🎯 FORZA IL RECUPERO SENZA CHIEDERE L'ELENCO
-                                onStatoConnessione = { connesso, messaggio ->
-                                    onStatusChange(connesso, messaggio, emptyList())
-                                },
-                                onElencoFogli = { _ -> },
-                                onFoglioDati = { _ -> }
-                            )
-                        } else {
-                            // Se era già connesso, esegue il normale ping di controllo
-                            ApiService.eseguiPingDiVerifica()
-                        }
+                        ApiService.eseguiPingDiVerifica()
                     }
                     .padding(vertical = 4.dp, horizontal = 2.dp)
             ) {
@@ -105,49 +85,40 @@ fun ZonaAltaView(
                     color = if (isConnected) Color(0xFF12B76A) else Color(0xFFF04438)
                 )
 
-                // Text(
-                //    text = "(${NetworkConfig.IP_PC})",
-                //    fontSize = 11.sp,
-                //    color = Color(0xFF98A2B3)
-                //)
                 Text(
-                    text = "($inputIp)", // 🎯 LEGGE LO STATO REATTIVO LOCALE
+                    text = "($inputIp)",
                     fontSize = 11.sp,
                     color = Color(0xFF98A2B3)
+                )
+
+                Text(
+                    text = " - $inputNota",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color(0xFF475467)
                 )
             }
         }
 
-        // 🎯 IL PULSANTE DI CONNETTI GENERALE: Mantiene il comportamento pulito standard (richiede l'elenco da zero)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                onClick = {
-                    onStartLoading("Connessione ed estrazione elenco in corso...")
-
-                    ApiService.connettiAlServer(
-                        context = context,
-                        notaUtente = inputNota,
-                       // richiedeLista = true, // 🎯 SCARICA L'ELENCO COMPLETO DA ZERO
-                        onStatoConnessione = { connesso, messaggio ->
-                            onStatusChange(connesso, messaggio, emptyList())
-                        },
-                        onElencoFogli = { listaRicevuta ->
-                            onStatusChange(true, "Elenco caricato con successo.", listaRicevuta)
-                        },
-                        onFoglioDati = { _ -> }
-                    )
-                },
-                modifier = Modifier.height(36.dp),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
-                shape = RoundedCornerShape(6.dp),
-                enabled = !isLoading
-            ) {
-                Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
+        IconButton(
+            onClick = { showInfoDialog = true },
+            modifier = Modifier.size(32.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Informazioni Sessione",
+                tint = Color(0xFF007AFF),
+                modifier = Modifier.size(22.dp)
+            )
         }
     }
 
+    // 🎯 RICHIAMO ALLA NUOVA VISTA ESTERNA DEL POPUP INFORMATIVO
+    if (showInfoDialog) {
+        InfoDialog(onDismissRequest = { showInfoDialog = false })
+    }
+
+    // FINESTRA CONFIGURAZIONE RETE
     if (showDialog) {
         AlertDialog(
             onDismissRequest = { showDialog = false },

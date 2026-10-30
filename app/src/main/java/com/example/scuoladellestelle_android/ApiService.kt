@@ -167,6 +167,15 @@ object ApiService {
                         onContenutoFoglioRicevuto?.invoke("ERRORE")
                     }
                 }
+
+                // 🎯 NUOVA GESTIONE RISPOSTA PING DAL SERVER PC WINDOWS
+                "PONG_ATTIVO" -> {
+                    Log.d(TAG, "🏓 Ricevuto PONG dal server VB.NET. Il canale radio è attivo.")
+                    scope.launch {
+                        // Aggiorna lo stato sulla UI lasciando i fogli intatti
+                        onConnessioneStabilità?.invoke(true, "Connessione verificata.")
+                    }
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Errore decodifica nel Socket: ${e.message}")

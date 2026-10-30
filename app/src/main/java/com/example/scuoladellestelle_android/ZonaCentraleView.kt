@@ -1,11 +1,11 @@
 package com.example.scuoladellestelle_android
 
 import android.provider.Settings
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Text
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,7 +27,10 @@ fun ZonaCentraleView(
     onFoglioSelezionato: (Int) -> Unit,
     onDownloadCompletato: (String) -> Unit,
     onErrore: () -> Unit,
-    onModificaFoglio: (String) -> Unit
+    onModificaFoglio: (String) -> Unit,
+    // 🎯 NUOVI PARAMETRI AGGIUNTI PER PASSARE LE FUNZIONI DI MAIN_ACTIVITY
+    onStartLoading: (String) -> Unit,
+    onStatusChange: (Boolean, String, List<StructElencofogliJson>) -> Unit
 ) {
     // STATO LOCALE: Registra il testo quando il server risponde
     var jsonFoglioContenuto by remember { mutableStateOf<String?>(null) }
@@ -37,6 +40,10 @@ fun ZonaCentraleView(
     val dispositivoHardwareId = remember(contestoAndroid) {
         Settings.Secure.getString(contestoAndroid.contentResolver, Settings.Secure.ANDROID_ID) ?: "ATTREZZO_SCONOSCIUTO"
     }
+
+    // Carichiamo le preferenze locali per poter usare la Nota Utente nel pulsante Connetti spostato qui
+    val prefs = remember { contestoAndroid.getSharedPreferences("config_rete", android.content.Context.MODE_PRIVATE) }
+    val notaUtenteSalvata = prefs.getString("nota_utente", "Tablet Aula 1") ?: "Tablet Aula 1"
 
     // Aggancio del listener di rete allineato all'interno dello scope dei parametri
     LaunchedEffect(Unit) {
@@ -86,7 +93,6 @@ fun ZonaCentraleView(
         if (jsonFoglioContenuto != null) {
             CompilazioneGiornalieroView(
                 jsonGrezzoString = jsonFoglioContenuto!!,
-                // 🎯 FIX DEFINITIVO: Ripristinato il nome del parametro corretto atteso dal tuo modulo
                 indiceSelezionatoEsterno = selectedId ?: 0,
                 onSalvaEProcedi = { jsonAggiornato: String ->
                     jsonFoglioContenuto = jsonAggiornato
@@ -100,19 +106,62 @@ fun ZonaCentraleView(
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(modifier = Modifier.fillMaxSize().padding(20.dp)) {
-                    Text(
-                        text = "Seleziona il Foglio da Compilare",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1D2939),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                    Text(
-                        text = statusMessage,
-                        fontSize = 14.sp,
-                        color = Color(0xFF667085),
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
+
+                    // 🎯 RISTRUTTURAZIONE IN ROW PER INSERIRE IL PULSANTE SULLA DESTRA
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Lato Sinistro: Testi informativi dinamici
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (fogliList.isEmpty()) "Connetti al Server" else "Seleziona il Foglio da Compilare",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF1D2939),
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            Text(
+                                text = statusMessage,
+                                fontSize = 14.sp,
+                                color = Color(0xFF667085)
+                            )
+                        }
+
+                        // Lato Destro: Il pulsante Connetti integrato permanentemente qui
+                        Button(
+                            onClick = {
+                                // 1. Attiva lo stato di caricamento sulla MainActivity
+                                onStartLoading("Connessione ed estrazione elenco in corso...")
+
+                                // 2. Lancia la connessione reale sul tunnel radio
+                                ApiService.connettiAlServer(
+                                    context = contestoAndroid,
+                                    notaUtente = notaUtenteSalvata,
+                                    onStatoConnessione = { connesso, messaggio ->
+                                        // Notifica la MainActivity del cambio di stato (passa lista vuota all'inizio)
+                                        onStatusChange(connesso, messaggio, emptyList())
+                                    },
+                                    onElencoFogli = { listaRicevuta ->
+                                        // Spinge l'elenco dei fogli finale alla MainActivity che aggiorna la griglia
+                                        onStatusChange(true, "Elenco caricato con successo.", listaRicevuta)
+                                    },
+                                    onFoglioDati = { _ -> }
+                                )
+                            },
+                            modifier = Modifier.height(38.dp),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF007AFF)),
+                            shape = RoundedCornerShape(6.dp),
+                            enabled = !isLoading
+                        ) {
+                            Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                        }
+
+
+
+                    }
 
                     if (isLoading) {
                         CircularProgressIndicator(
@@ -132,7 +181,7 @@ fun ZonaCentraleView(
                     } else {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             Text(
-                                text = "Nessun foglio in memoria.\nPremi 'Verifica Connessione' in alto.",
+                                text = "Nessun foglio in memoria.\nPremi 'Connetti' a destra per iniziare.",
                                 textAlign = TextAlign.Center,
                                 color = Color(0xFF98A2B3),
                                 fontSize = 15.sp

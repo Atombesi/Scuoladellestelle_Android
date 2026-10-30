@@ -3,17 +3,27 @@ package com.example.scuoladellestelle_android
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
@@ -42,6 +52,9 @@ fun SchermataOperatore() {
 
     var showConfermaDialog by remember { mutableStateOf(false) }
     var idDaScaricareTpc by remember { mutableStateOf<Int?>(null) }
+
+    // 🎯 NUOVA VARIABILE DI STATO: Memorizza il foglio intero cliccato per estrarre i dati reali
+    var foglioSelezionatoPerConferma by remember { mutableStateOf<StructElencofogliJson?>(null) }
 
     // ID del Tablet configurato per la sincronizzazione con l'anagrafica VB.NET
     val dispositivoHardwareId = "TABLET_01"
@@ -111,6 +124,8 @@ fun SchermataOperatore() {
             selectedId = selectedId,
             onFoglioSelezionato = { id: Int ->
                 idDaScaricareTpc = id
+                // 🎯 CERCA PER ID_QUESTIONARIO: Ripristina la logica nativa del tuo server VB.NET
+                foglioSelezionatoPerConferma = fogliList.find { it.ID_Questionario == id }
                 showConfermaDialog = true
             },
             onDownloadCompletato = { json: String ->
@@ -132,6 +147,19 @@ fun SchermataOperatore() {
             },
             onModificaFoglio = { jsonAggiornato: String ->
                 jsonFoglioSelezionato = jsonAggiornato
+            },
+            // 🎯 PASSAGGIO DELLE LAMBDA REALI PER MANDARE I DATI AL PULSANTE SPOSTATO AL CENTRO
+            onStartLoading = { messaggio ->
+                isLoading = true
+                statusMessage = messaggio
+            },
+            onStatusChange = { connesso, messaggio, lista ->
+                isConnected = connesso
+                statusMessage = messaggio
+                if (lista.isNotEmpty() || !connesso) {
+                    fogliList = lista
+                }
+                isLoading = false
             }
         )
 
@@ -190,13 +218,55 @@ fun SchermataOperatore() {
                 }
             )
         }
-    }
-
-    if (showConfermaDialog) {
+    } // Chiude la Column principale
+// 🎯 NUOVO DIALOG DI SICUREZZA CON DETTAGLI REALI E STRUTTURA COERENTE CON LE TUE VARIABILI ORIGINALI
+    if (showConfermaDialog && foglioSelezionatoPerConferma != null) {
         AlertDialog(
-            onDismissRequest = { showConfermaDialog = false },
-            title = { Text("Scaricamento Foglio", fontSize = 18.sp) },
-            text = { Text("Vuoi scaricare il file JSON del modulo selezionato (ID: $idDaScaricareTpc) dal server VB.NET?") },
+            onDismissRequest = {
+                showConfermaDialog = false
+                foglioSelezionatoPerConferma = null
+            },
+            title = {
+                Text(
+                    text = "Conferma Caricamento",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF1D2939)
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "Sei sicuro di voler caricare questo foglio di lavoro?",
+                        fontSize = 14.sp,
+                        color = Color(0xFF344054),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+// Scheda grigia riassuntiva dei dati reali del foglio
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E7EC))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(text = "👶  Bambino: ${foglioSelezionatoPerConferma?.Bambino ?: "N/D"}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D2939))
+                            Text(text = "📅  Data Foglio: ${foglioSelezionatoPerConferma?.Data_foglio ?: "N/D"}", fontSize = 13.sp, color = Color(0xFF475467))
+                            Text(text = "🔢  ID Foglio: # ${foglioSelezionatoPerConferma?.ID_foglio ?: "0"}", fontSize = 12.sp, color = Color(0xFF98A2B3))
+                        }
+                    }
+                    Text(
+                        text = "Premendo Sì, verrà inviata la richiesta al server.",
+                        fontSize = 13.sp,
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF475467),
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
@@ -205,18 +275,26 @@ fun SchermataOperatore() {
                             selectedId = id
                             isLoading = true
                             statusMessage = "Richiesta file JSON in corso..."
+
+                            // 🎯 Invia il pacchetto originale con l'ID corretto che il server si aspetta
                             val comandoFoglioJson = """{"type":"RICHIEDI_FOGLIO","id_questionario":$id}"""
                             ApiService.inviaComandoAlPC(comandoFoglioJson)
                         }
-                    }
+                        foglioSelezionatoPerConferma = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF12B76A))
                 ) {
-                    Text("Sì, Scarica", color = Color.White)
+                    Text("Sì, Scarica", fontWeight = FontWeight.Bold, color = Color.White)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showConfermaDialog = false }) {
-
-                    Text("Annulla", color = Color(0xFF475467))
+                OutlinedButton(
+                    onClick = {
+                        showConfermaDialog = false
+                        foglioSelezionatoPerConferma = null
+                    }
+                ) {
+                    Text("No, Annulla", color = Color(0xFF475467))
                 }
             }
         )
