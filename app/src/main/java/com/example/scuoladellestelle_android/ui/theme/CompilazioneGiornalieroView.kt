@@ -47,6 +47,9 @@ fun CompilazioneGiornalieroView(
     var indiceUnificatoSelezionato by remember { mutableIntStateOf(0) }
     var campoAttivoId by remember { mutableIntStateOf(1) }
 
+    // 🎯 STATO FLAG AGGIOUNTO: Tiene traccia se siamo appena entrati in una cella per azzerarla al primo tasto numerico
+    var isCellaAppenaSelezionata by remember(indiceUnificatoSelezionato, campoAttivoId) { mutableStateOf(true) }
+
     LaunchedEffect(Unit) {
         indiceUnificatoSelezionato = 0
         campoAttivoId = 1
@@ -59,8 +62,6 @@ fun CompilazioneGiornalieroView(
         }
     }
 
-    //val elementoAttivo = if (listaUnificata.isNotEmpty()) listaUnificata[indiceUnificatoSelezionato] else null
-    // 🎯 PROTEZIONE DI RUNTIME: Verifica che l'indice rientri strettamente nella dimensione reale dell'array
     val elementoAttivo = if (listaUnificata.isNotEmpty() && indiceUnificatoSelezionato in listaUnificata.indices) {
         listaUnificata[indiceUnificatoSelezionato]
     } else if (listaUnificata.isNotEmpty()) {
@@ -68,6 +69,7 @@ fun CompilazioneGiornalieroView(
     } else {
         null
     }
+
     Row(modifier = Modifier.fillMaxSize().background(Color(0xFFF9FAFB))) {
         LazyColumn(
             modifier = Modifier
@@ -106,18 +108,16 @@ fun CompilazioneGiornalieroView(
                     } else {
                         Box(modifier = Modifier.size(16.dp).border(2.dp, coloreTema, CircleShape))
                     }
-                    // =======================================================================
-                    // 2. INSERISCI QUESTO BLOCCO QUI: BADGE COMPARIRE IN ROSSO SOLO DOPO INSERIMENTO
-                    // =======================================================================
+
                     val stringaStatoRisposta = when (elem.tipo) {
                         "G" -> {
                             val v1 = voceObj.optInt("TOT1", 0)
                             val v2 = voceObj.optInt("TOT2", 0)
                             when {
-                                v1 > 0 && v2 > 0 -> "[$v1-$v2]" // Entrambi presenti
-                                v1 > 0 -> "$v1"                 // Solo primo presente
-                                v2 > 0 -> "$v2"                 // Solo secondo presente
-                                else -> ""                      // Stringa vuota: Invisibile all'avvio!
+                                v1 > 0 && v2 > 0 -> "[$v1-$v2]"
+                                v1 > 0 -> "$v1"
+                                v2 > 0 -> "$v2"
+                                else -> ""
                             }
                         }
                         "RT" -> {
@@ -139,12 +139,11 @@ fun CompilazioneGiornalieroView(
                             fontWeight = FontWeight.Bold,
                             color = when (elem.tipo) {
                                 "RT" -> if (stringaStatoRisposta == "[SÌ]") Color(0xFF12B76A) else Color(0xFFF04438)
-                                else -> Color(0xFFF04438) // Sempre Rosso per Giornalieri e Comportamentali
+                                else -> Color(0xFFF04438)
                             },
                             modifier = Modifier.padding(end = 6.dp)
                         )
                     }
-                    // =======================================================================
 
                     Text(text = testoVoce.trim(), fontSize = 12.sp, fontWeight = if (isCorrente) FontWeight.Bold else FontWeight.Medium, color = if (isCorrente) Color(0xFF007AFF) else Color(0xFF344054), modifier = Modifier.weight(1f))
                 }
@@ -231,7 +230,6 @@ fun CompilazioneGiornalieroView(
                             }
                         }
                     }
-
                     if (elementoAttivo.tipo != "RT") {
                         Card(modifier = Modifier.width(240.dp).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = Color(0xFFF2F4F7)), border = BorderStroke(1.dp, Color(0xFFD0D5DD))) {
                             Column(modifier = Modifier.padding(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -248,7 +246,6 @@ fun CompilazioneGiornalieroView(
                                                     var stringaLavorazione = if (elementoAttivo.tipo == "G") {
                                                         when (campoAttivoId) { 1 -> t1Pos; 2 -> t1Neg; 3 -> t1Prp; 4 -> t2Pos; 5 -> t2Neg; else -> t2Prp }
                                                     } else { totUnicoSingolo }
-
                                                     if (isCancella) {
                                                         stringaLavorazione = if (stringaLavorazione.length > 1) stringaLavorazione.dropLast(1) else "0"
                                                         if (elementoAttivo.tipo == "G") {
@@ -267,7 +264,9 @@ fun CompilazioneGiornalieroView(
                                                             voceObj.put("TOT", totUnicoSingolo.toIntOrNull() ?: 0); voceObj.put("COMPILATO", 1); onSalvaEProcedi(rootJson.toString()); if (indiceUnificatoSelezionato < listaUnificata.size - 1) { indiceUnificatoSelezionato++ }
                                                         }
                                                     } else {
-                                                        val testoPulito = if (stringaLavorazione == "0") "" else stringaLavorazione
+// 🎯 INTERCETTAZIONE NUMERICA (DA 0 A 9): Gestisce la sovrascrittura condizionata
+                                                        val testoPulito = if (isCellaAppenaSelezionata || stringaLavorazione == "0") "" else stringaLavorazione
+                                                        isCellaAppenaSelezionata = false // Consente l'inserimento della seconda cifra normalmente
                                                         if (testoPulito.length < 2) {
                                                             val stringaRisultante = testoPulito + carattereTasto
                                                             if (elementoAttivo.tipo == "G") {
@@ -276,8 +275,7 @@ fun CompilazioneGiornalieroView(
                                                                 val v4 = t2Pos.toIntOrNull() ?: 0; val v5 = t2Neg.toIntOrNull() ?: 0; val v6 = t2Prp.toIntOrNull() ?: 0
                                                                 val ct1 = v1 + v2 + v3; val ct2 = v4 + v5 + v6
                                                                 val e1 = !isValutativo && ct1 != 20 && ct1 != 0; val e2 = !isValutativo && ct2 != 20 && ct2 != 0
-                                                                
-                                                                if (stringaRisultante.length == 2) { // <--- CORREZIONE: Avanza solo a 2 cifre
+                                                                if (stringaRisultante.length == 2) {
                                                                     if (campoAttivoId < 6) {
                                                                         campoAttivoId++
                                                                     } else {
@@ -315,8 +313,13 @@ fun CompilazioneGiornalieroView(
 @Composable
 fun BoxCasellaFinta(testo: String, isAttiva: Boolean, errore: Boolean, modifier: Modifier = Modifier) {
     val bordoColore = when { isAttiva -> Color(0xFF007AFF); errore -> Color.Red; else -> Color(0xFFD0D5DD) }
-    val colSfondo = if (isAttiva) Color(0xFFF0F7FF) else Color(0xFFF9FAFB)
+// 🎨 CORREZIONE GRAFICA: Se la cella è attiva e isCellaAppenaSelezionata è true, diamo un azzurro più intenso per simulare l'evidenziazione standard
+    val colSfondo = if (isAttiva) Color(0xFFD1E9FF) else Color(0xFFF9FAFB)
     Box(modifier = modifier.padding(horizontal = 2.dp, vertical = 1.dp).height(34.dp).background(colSfondo, RoundedCornerShape(4.dp)).border(if (isAttiva) 2.dp else 1.dp, bordoColore, RoundedCornerShape(4.dp)), contentAlignment = Alignment.Center) {
         Text(text = testo.ifBlank { "0" }, fontSize = 14.sp, fontWeight = FontWeight.Bold, color = if (errore && !isAttiva) Color.Red else Color(0xFF1D2939))
     }
 }
+
+
+
+

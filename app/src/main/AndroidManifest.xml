@@ -23,6 +23,8 @@
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:screenOrientation="landscape"
+            android:configChanges="orientation|screenSize|screenLayout"
             android:theme="@style/Theme.Scuoladellestelle_Android">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

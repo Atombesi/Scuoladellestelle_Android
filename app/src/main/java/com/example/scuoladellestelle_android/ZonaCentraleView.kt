@@ -85,7 +85,12 @@ fun ZonaCentraleView(
             }
         }
     }
-
+    // 🎯 INCOLLALO ESATTAMENTE QUI, SUBITO SOTTO IL CHIUDI GRAFFA DEL PRECEDENTE LAUNCHED_EFFECT
+    LaunchedEffect(selectedId) {
+        if (selectedId == null) {
+            jsonFoglioContenuto = null
+        }
+    }
     Box(
         modifier = modifier.padding(20.dp),
         contentAlignment = Alignment.Center

@@ -52,6 +52,9 @@ fun SchermataOperatore() {
 
     var showConfermaDialog by remember { mutableStateOf(false) }
     var idDaScaricareTpc by remember { mutableStateOf<Int?>(null) }
+    var showConfermaInvioDialog by remember { mutableStateOf(false) }
+    // 🎯 VARIABILE AGGIUNTA PER IL POPUP DI ANNULLAMENTO
+    var showConfermaInterrompiDialog by remember { mutableStateOf(false) }
 
     // 🎯 NUOVA VARIABILE DI STATO: Memorizza il foglio intero cliccato per estrarre i dati reali
     var foglioSelezionatoPerConferma by remember { mutableStateOf<StructElencofogliJson?>(null) }
@@ -208,13 +211,11 @@ fun SchermataOperatore() {
                     }
                 },
                 onInviaClick = {
-                    val pacchettoDiRitorno = JSONObject().apply {
-                        put("type", "SALVA_FOGLIO_COMPILATO")
-                        put("id_foglio", rootObj.optInt("ID_Foglio"))
-                        put("dati", rootObj)
-                    }
-                    ApiService.inviaComandoAlPC(pacchettoDiRitorno.toString())
-                    statusMessage = "Dati spinti in rete verso il PC Windows."
+                    showConfermaInvioDialog = true
+                },
+                // 🎯 AGGANCIO NUOVO: Mostra il popup di interruzione al tocco
+                onInterrompiClick = {
+                    showConfermaInterrompiDialog = true
                 }
             )
         }
@@ -299,4 +300,123 @@ fun SchermataOperatore() {
             }
         )
     }
+    // 🎯 NUOVO POPUP DI SICUREZZA PER L'INVIO DEI DATI COMPILATI AL SERVER PC WINDOWS
+    if (showConfermaInvioDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfermaInvioDialog = false },
+            title = {
+                Text(
+                    text = "Conferma invio foglio compilato",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF1D2939)
+                )
+            },
+            text = {
+                Text(
+                    text = "Vuoi inviare il foglio compilato al Server?",
+                    fontSize = 14.sp,
+                    color = Color(0xFF344054)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        // 1. Chiude e distrugge istantaneamente lo strato del Dialog
+                        showConfermaInvioDialog = false
+                        isLoading = true
+                        statusMessage = "Invio del foglio compilato al PC Windows..."
+
+                        // 2. Riesegue l'esatta logica nativa che avevi nel tuo file funzionante
+                        val rootObj = JSONObject(jsonFoglioSelezionato!!)
+                        val pacchettoDiRitorno = JSONObject().apply {
+                            put("type", "SALVA_FOGLIO_COMPILATO")
+                            put("id_foglio", rootObj.optInt("ID_Foglio"))
+                            put("dati", rootObj)
+                        }
+                        ApiService.inviaComandoAlPC(pacchettoDiRitorno.toString())
+                        statusMessage = "Dati spinti in rete verso il PC Windows."
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF12B76A)) // Verde operativo
+                ) {
+                    Text("Sì, Invia", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showConfermaInvioDialog = false }
+                ) {
+                    Text("Annulla", color = Color(0xFF475467))
+                }
+            }
+        )
+    }
+    // 🎯 NUOVO POPUP DI SICUREZZA PER INTERROMPERE LA COMPILAZIONE E SBLOCCARE IL SERVER
+    if (showConfermaInterrompiDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfermaInterrompiDialog = false },
+            title = {
+                Text(
+                    text = "Annulla Compilazione",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color(0xFF1D2939)
+                )
+            },
+            text = {
+                Text(
+                    text = "Vuoi interrompere la compilazione del modulo attuale?\nIl server rilascerà lo stato occupato di questo documento.",
+                    fontSize = 14.sp,
+                    color = Color(0xFF344054)
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showConfermaInterrompiDialog = false
+                        isLoading = true
+                        statusMessage = "Invio annullamento al Server..."
+
+                        try {
+                            // 🎯 ESTRAZIONE CORRETTA: Prende l'ID_Questionario nativo del server PC
+                            val rootObj = JSONObject(jsonFoglioSelezionato!!)
+                            var idQuestionarioEstratto = rootObj.optInt("ID_Questionario", 0)
+                            if (idQuestionarioEstratto == 0) {
+                                idQuestionarioEstratto = rootObj.optInt("ID_questionario", 0)
+                            }
+
+                            // Costruisce il pacchetto concordato con la chiave corretta
+                            val pacchettoAnnullamento = JSONObject().apply {
+                                put("type", "COMPILAZIONE_ANNULLATA")
+                                put("id_questionario", idQuestionarioEstratto)
+                            }
+
+                            // Spinge il comando radio nel tunnel nativo
+                            ApiService.inviaComandoAlPC(pacchettoAnnullamento.toString())
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+
+                        // Ripristina l'applicazione tornando alla schermata di connessione/griglia
+                        jsonFoglioSelezionato = null
+                        selectedId = null
+                        statusMessage = "Compilazione annullata. Sessione sbloccata sul Server."
+                        isLoading = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF04438)) // Rosso avviso
+                ) {
+                    Text("Sì, Interrompi", fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(
+                    onClick = { showConfermaInterrompiDialog = false }
+                ) {
+                    Text("No, Continua", color = Color(0xFF475467))
+                }
+            }
+        )
+    }
+
+
 }

@@ -1,3 +1,4 @@
+// Versione 1.01 del 31-10-2026 11:53
 package com.example.scuoladellestelle_android
 
 import androidx.compose.foundation.background
@@ -20,7 +21,9 @@ fun ZonaBassaView(
     totaliRT: Int, compilatiRT: Int,
     totaliCP: Int, compilatiCP: Int,
     onSaltoCategoria: (String) -> Unit,
-    onInviaClick: () -> Unit
+    onInviaClick: () -> Unit,
+    // 🎯 NUOVO PARAMETRO AGGIUNTO PER INTERCETTARE IL CLICK DI ANNULLAMENTO
+    onInterrompiClick: () -> Unit
 ) {
     val tuttoCompleto = (totaliG > 0 && compilatiG == totaliG) &&
             (totaliRT > 0 && compilatiRT == totaliRT) &&
@@ -55,23 +58,45 @@ fun ZonaBassaView(
             )
         }
 
-        // ➔ LATO DESTRA: Pulsante di invio intelligente
-        Button(
-            onClick = { onInviaClick() },
-            modifier = Modifier.height(38.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (tuttoCompleto) Color(0xFF12B76A) else Color(0xFF6B7280)
-            ),
-            shape = RoundedCornerShape(6.dp),
-            enabled = tuttoCompleto // 🎯 DISABILITA IL CLICK SE IL FOGLIO NON È INTERAMENTE COMPILATO
+        // ➔ LATO DESTRA: Gruppo pulsanti operativi affiancati
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = if (tuttoCompleto) "Invia Dati al PC ➔" else "Salva Sessione",
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 13.sp
-            )
+            // 🎯 PULSANTE ROSSO INTERROMPI: Sempre disponibile durante la compilazione
+            Button(
+                onClick = { onInterrompiClick() },
+                modifier = Modifier.height(38.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF04438)), // Rosso operativo
+                shape = RoundedCornerShape(6.dp)
+            ) {
+                Text(
+                    text = "Interrompi",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            // Pulsante di invio o salvataggio intelligente originario
+            Button(
+                onClick = { onInviaClick() },
+                modifier = Modifier.height(38.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (tuttoCompleto) Color(0xFF12B76A) else Color(0xFF6B7280)
+                ),
+                shape = RoundedCornerShape(6.dp),
+                enabled = tuttoCompleto
+            ) {
+                Text(
+                    text = if (tuttoCompleto) "Invia Dati al PC ➔" else "Salva Sessione",
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
         }
     }
 }
