@@ -102,7 +102,10 @@ fun ZonaAltaView(
 
         IconButton(
             onClick = { showInfoDialog = true },
-            modifier = Modifier.size(32.dp)
+            modifier = Modifier
+                .offset(x = (-48).dp)
+                .size(32.dp)
+
         ) {
             Icon(
                 imageVector = Icons.Default.Info,

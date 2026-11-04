@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,11 +34,15 @@ fun InfoDialog(
 ) {
     val context = LocalContext.current
 
+    // Rilevamento tramite la funzione globale centralizzata in Version.kt
+    val isTablet = AppVersion.isTablet(context)
+
     Dialog(onDismissRequest = onDismissRequest) {
         Card(
+            // 🎯 MODIFICATO: Altezza smartphone incrementata a 720.dp (+40%) per garantire massima estensione verticale
             modifier = Modifier
-                .width(550.dp)
-                .height(340.dp),
+                .width(if (isTablet) 550.dp else 320.dp)
+                .height(if (isTablet) 340.dp else 720.dp),
             shape = RoundedCornerShape(12.dp)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -69,7 +74,7 @@ fun InfoDialog(
                             painter = painterResource(id = R.drawable.io),
                             contentDescription = "Foto Andrea Tombesi",
                             modifier = Modifier
-                                .size(65.dp)
+                                .size(if (isTablet) 65.dp else 55.dp)
                                 .clip(RoundedCornerShape(8.dp))
                                 .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(8.dp)),
                             contentScale = ContentScale.Crop
@@ -78,28 +83,28 @@ fun InfoDialog(
                         Text(
                             text = "Andrea Tombesi",
                             color = Color.White,
-                            fontSize = 20.sp,
+                            fontSize = if (isTablet) 20.sp else 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
 
-                    // Sezione Contatti Spaziati e Corretti
+                    // Sezione Contatti Spaziati e Adattivi
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(start = 40.dp, top = 8.dp), // Allineamento rientrato a metà foto
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                            .padding(start = if (isTablet) 40.dp else 4.dp, top = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(if (isTablet) 12.dp else 16.dp)
                     ) {
                         // 1. RIGA EMAIL
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "✉", color = Color.White, fontSize = 14.sp)
+                            Text(text = "✉", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
                                 text = "brz.modena@gmail.com",
                                 color = Color(0xFF63B3ED),
-                                fontSize = 14.sp,
+                                fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
@@ -115,21 +120,21 @@ fun InfoDialog(
                             )
                         }
 
-                        // 2. RIGA WORDPRESS (Modificata con la tua stringa pulita)
+                        // 2. RIGA WORDPRESS
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "🌐", color = Color.White, fontSize = 14.sp)
+                            Text(text = "🌐", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
-                                text = "AndreaTombesi.wordpress.com",
+                                text = "://wordpress.com",
                                 color = Color(0xFF63B3ED),
-                                fontSize = 14.sp,
+                                fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
                                     try {
-                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://andreatombesi.wordpress.com"))
+                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://://wordpress.com"))
                                         context.startActivity(intentBrowser)
                                     } catch (e: Exception) {
                                         e.printStackTrace()
@@ -138,21 +143,21 @@ fun InfoDialog(
                             )
                         }
 
-                        // 3. RIGA GITHUB (Modificata con il puntamento corretto alla tua repository)
+                        // 3. RIGA GITHUB
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "💻", color = Color.White, fontSize = 14.sp)
+                            Text(text = "💻", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
-                                text = "Github.com/Atombesi",
+                                text = "://github.com",
                                 color = Color(0xFF63B3ED),
-                                fontSize = 14.sp,
+                                fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
                                     try {
-                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Atombesi"))
+                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://://github.com"))
                                         context.startActivity(intentBrowser)
                                     } catch (e: Exception) {
                                         e.printStackTrace()
@@ -166,18 +171,42 @@ fun InfoDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "📍", color = Color.White, fontSize = 14.sp)
+                            Text(text = "📍", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
                                 text = "Modena, Italy",
                                 color = Color.White,
-                                fontSize = 14.sp,
+                                fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium
                             )
                         }
                     }
 
-                    // Sezione Bassa: Ringraziamenti
+                    // Sezione Bassa: Info Dispositivo + Versione + Ringraziamenti
                     Column(modifier = Modifier.fillMaxWidth()) {
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Scritta permanente discreta a sinistra
+                            Text(
+                                text = if (isTablet) "Tablet" else "Smartphone",
+                                fontSize = 10.sp,
+                                color = Color.White.copy(alpha = 0.40f)
+                            )
+
+                            // Versione in basso a destra
+                            Text(
+                                text = "Versione n. ${AppVersion.CODICE}",
+                                fontSize = 11.sp,
+
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White.copy(alpha = 0.50f)
+                            )
+                        }
                         HorizontalDivider(
                             color = Color.White.copy(alpha = 0.25f),
                             thickness = 1.dp,
@@ -186,14 +215,13 @@ fun InfoDialog(
                         Text(
                             text = "Special thanks to the code generator and the open-source libraries that made this project possible.",
                             color = Color.White.copy(alpha = 0.8f),
-                            fontSize = 11.sp,
+                            fontSize = if (isTablet) 11.sp else 10.sp,
                             fontStyle = FontStyle.Italic,
-                            lineHeight = 15.sp
+                            lineHeight = if (isTablet) 15.sp else 13.sp
                         )
                     }
                 }
-
-                // Bottone ad incrocio (X)
+// Pulsante di Chiusura ad Icona in alto a destra
                 IconButton(
                     onClick = onDismissRequest,
                     modifier = Modifier

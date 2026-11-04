@@ -154,6 +154,14 @@ object ApiService {
                             )
                         )
                     }
+
+                    // 🎯 DIRETTIVA APPLICATA: Se la lista estratta dal server è vuota, notifichiamo uno stato speciale alla UI
+                    if (listaFogli.isEmpty()) {
+                        onConnessioneStabilità?.invoke(true, "SERVER_VUOTO")
+                    } else {
+                        onConnessioneStabilità?.invoke(true, "Elenco caricato con successo.")
+                    }
+
                     onElencoRicevuto?.invoke(listaFogli)
                 }
 

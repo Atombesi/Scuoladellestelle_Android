@@ -157,13 +157,27 @@ fun SchermataOperatore() {
                 statusMessage = messaggio
             },
             onStatusChange = { connesso, messaggio, lista ->
-                isConnected = connesso
-                statusMessage = messaggio
-                if (lista.isNotEmpty() || !connesso) {
-                    fogliList = lista
+                // 1. Se abbiamo già intercettato il server vuoto, blocchiamo la successiva sovrascrittura automatica
+                if (statusMessage == "Nessun foglio disponibile da compilare" && messaggio == "Elenco caricato con successo.") {
+                    isLoading = false
+                } else {
+                    // 2. Comportamento standard per tutte le altre notifiche
+                    isConnected = connesso
+
+                    if (messaggio == "SERVER_VUOTO") {
+                        statusMessage = "Nessun foglio disponibile da compilare"
+                        fogliList = emptyList() // Svuota la griglia se c'erano vecchi residui
+                    } else {
+                        statusMessage = messaggio
+                    }
+
+                    if (lista.isNotEmpty() || !connesso) {
+                        fogliList = lista
+                    }
+                    isLoading = false
                 }
-                isLoading = false
             }
+
         )
 
         // 3. ZONA BASSA VISIBILE SOLO SE IL FOGLIO È APERTO

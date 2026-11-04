@@ -185,12 +185,24 @@ fun ZonaCentraleView(
                         )
                     } else {
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "Nessun foglio in memoria.\nPremi 'Connetti' a destra per iniziare.",
-                                textAlign = TextAlign.Center,
-                                color = Color(0xFF98A2B3),
-                                fontSize = 15.sp
-                            )
+                            if (statusMessage == "Nessun foglio disponibile da compilare") {
+                                // 🎯 MESSAGGIO AL CENTRO, GRANDE E BEN VISIBILE
+                                Text(
+                                    text = statusMessage,
+                                    textAlign = TextAlign.Center,
+                                    color = Color(0xFFF04438), // Rosso avviso coerente con i tuoi popup
+                                    fontSize = 22.sp,          // Dimensione maggiorata
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                // Testo di default iniziale all'apertura dell'app
+                                Text(
+                                    text = "Nessun foglio in memoria.\nPremi 'Connetti' a destra per iniziare.",
+                                    textAlign = TextAlign.Center,
+                                    color = Color(0xFF98A2B3),
+                                    fontSize = 15.sp
+                                )
+                            }
                         }
                     }
                 }
