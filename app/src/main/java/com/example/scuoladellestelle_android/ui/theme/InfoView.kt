@@ -100,7 +100,11 @@ fun InfoDialog(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Text(text = "✉", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
+                            Text(
+                                text = "✉",
+                                color = Color.White,
+                                fontSize = if (isTablet) 14.sp else 12.sp
+                            )
                             Text(
                                 text = "brz.modena@gmail.com",
                                 color = Color(0xFF63B3ED),
@@ -109,32 +113,32 @@ fun InfoDialog(
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
                                     try {
-                                        val intentEmail = Intent(Intent.ACTION_SENDTO).apply {
-                                            data = Uri.parse("mailto:brz.modena@gmail.com")
-                                        }
+                                        val intentEmail = Intent(
+                                            Intent.ACTION_SENDTO,
+                                            Uri.parse("mailto:brz.modena@gmail.com")
+                                        )
                                         context.startActivity(intentEmail)
                                     } catch (e: Exception) {
                                         e.printStackTrace()
                                     }
                                 }
                             )
-                        }
-
-                        // 2. RIGA WORDPRESS
+                        }                        // 2. RIGA WORDPRESS
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             Text(text = "🌐", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
-                                text = "://wordpress.com",
+                                text = "AndreaTombesi.wordpress.com",
                                 color = Color(0xFF63B3ED),
                                 fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
                                     try {
-                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://://wordpress.com"))
+//                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://://wordpress.com"))
+                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://andreatombesi.wordpress.com"))
                                         context.startActivity(intentBrowser)
                                     } catch (e: Exception) {
                                         e.printStackTrace()
@@ -150,14 +154,14 @@ fun InfoDialog(
                         ) {
                             Text(text = "💻", color = Color.White, fontSize = if (isTablet) 14.sp else 12.sp)
                             Text(
-                                text = "://github.com",
+                                text = "github.com/Atombesi",
                                 color = Color(0xFF63B3ED),
                                 fontSize = if (isTablet) 14.sp else 12.sp,
                                 fontWeight = FontWeight.Medium,
                                 textDecoration = TextDecoration.Underline,
                                 modifier = Modifier.clickable {
                                     try {
-                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://://github.com"))
+                                        val intentBrowser = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/Atombesi"))
                                         context.startActivity(intentBrowser)
                                     } catch (e: Exception) {
                                         e.printStackTrace()

@@ -27,6 +27,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.json.JSONArray
 import org.json.JSONObject
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +66,10 @@ fun SchermataOperatore() {
 
     // ID del Tablet configurato per la sincronizzazione con l'anagrafica VB.NET
     val dispositivoHardwareId = "TABLET_01"
+
+// 🎯 VARIABILE ADATTIVA CORRETTA: Usa il tuo file Version.kt nativo passando il contesto di Compose
+    val contestoLocal = androidx.compose.ui.platform.LocalContext.current
+    val isTablet = AppVersion.isTablet(contestoLocal)
 
     // AGGANCIO DEL TUBO RADIO NATIVO: Lo facciamo una volta sola all'avvio dell'app!
     LaunchedEffect(Unit) {
@@ -234,7 +243,12 @@ fun SchermataOperatore() {
             )
         }
     } // Chiude la Column principale
-// 🎯 NUOVO DIALOG DI SICUREZZA CON DETTAGLI REALI E STRUTTURA COERENTE CON LE TUE VARIABILI ORIGINALI
+
+
+
+
+
+    // 🎯 NUOVO DIALOG DI SICUREZZA ADATTIVO PER TABLET E CELLULARE IN ORIZZONTALE
     if (showConfermaDialog && foglioSelezionatoPerConferma != null) {
         AlertDialog(
             onDismissRequest = {
@@ -245,40 +259,59 @@ fun SchermataOperatore() {
                 Text(
                     text = "Conferma Caricamento",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
+                    fontSize = if (isTablet) 18.sp else 14.sp,
                     color = Color(0xFF1D2939)
                 )
             },
             text = {
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
+                    verticalArrangement = Arrangement.spacedBy(if (isTablet) 8.dp else 2.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
                 ) {
                     Text(
                         text = "Sei sicuro di voler caricare questo foglio di lavoro?",
-                        fontSize = 14.sp,
+                        fontSize = if (isTablet) 14.sp else 11.sp,
                         color = Color(0xFF344054),
-                        modifier = Modifier.padding(bottom = 8.dp)
+                        modifier = Modifier.padding(bottom = if (isTablet) 8.dp else 1.dp)
                     )
-// Scheda grigia riassuntiva dei dati reali del foglio
+
+                    // Scheda grigia adattiva: Column su tablet, Row semplificata su cellulare
                     Card(
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE4E7EC))
                     ) {
-                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(text = "👶  Bambino: ${foglioSelezionatoPerConferma?.Bambino ?: "N/D"}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D2939))
-                            Text(text = "📅  Data Foglio: ${foglioSelezionatoPerConferma?.Data_foglio ?: "N/D"}", fontSize = 13.sp, color = Color(0xFF475467))
-                            Text(text = "🔢  ID Foglio: # ${foglioSelezionatoPerConferma?.ID_foglio ?: "0"}", fontSize = 12.sp, color = Color(0xFF98A2B3))
+                        if (isTablet) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(text = "👶  Bambino: ${foglioSelezionatoPerConferma?.Bambino ?: "N/D"}", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D2939))
+                                Text(text = "📅  Data Foglio: ${foglioSelezionatoPerConferma?.Data_foglio ?: "N/D"}", fontSize = 13.sp, color = Color(0xFF475467))
+                                Text(text = "🔢  ID Foglio: # ${foglioSelezionatoPerConferma?.ID_foglio ?: "0"}", fontSize = 12.sp, color = Color(0xFF98A2B3))
+                            }
+                        } else {
+                            // 🎯 ROW SEMPLIFICATA SENZA WEIGHT: Spazia gli elementi in orizzontale in modo nativo
+                            androidx.compose.foundation.layout.Row(
+                                modifier = Modifier.fillMaxWidth().padding(6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(text = "👶 ${foglioSelezionatoPerConferma?.Bambino ?: "N/D"}", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1D2939))
+                                Text(text = "📅 ${foglioSelezionatoPerConferma?.Data_foglio ?: "N/D"}", fontSize = 10.sp, color = Color(0xFF475467))
+                                Text(text = "# ${foglioSelezionatoPerConferma?.ID_foglio ?: "0"}", fontSize = 10.sp, color = Color(0xFF98A2B3))
+                            }
                         }
                     }
+
                     Text(
                         text = "Premendo Sì, verrà inviata la richiesta al server.",
-                        fontSize = 13.sp,
+                        fontSize = if (isTablet) 13.sp else 10.sp,
                         fontStyle = FontStyle.Italic,
                         color = Color(0xFF475467),
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = if (isTablet) 6.dp else 1.dp)
                     )
                 }
             },
@@ -290,16 +323,15 @@ fun SchermataOperatore() {
                             selectedId = id
                             isLoading = true
                             statusMessage = "Richiesta file JSON in corso..."
-
-                            // 🎯 Invia il pacchetto originale con l'ID corretto che il server si aspetta
                             val comandoFoglioJson = """{"type":"RICHIEDI_FOGLIO","id_questionario":$id}"""
                             ApiService.inviaComandoAlPC(comandoFoglioJson)
                         }
                         foglioSelezionatoPerConferma = null
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF12B76A))
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF12B76A)),
+                    contentPadding = PaddingValues(horizontal = if (isTablet) 16.dp else 10.dp, vertical = if (isTablet) 8.dp else 2.dp)
                 ) {
-                    Text("Sì, Scarica", fontWeight = FontWeight.Bold, color = Color.White)
+                    Text("Sì, Scarica", fontWeight = FontWeight.Bold, color = Color.White, fontSize = if (isTablet) 14.sp else 11.sp)
                 }
             },
             dismissButton = {
@@ -307,13 +339,21 @@ fun SchermataOperatore() {
                     onClick = {
                         showConfermaDialog = false
                         foglioSelezionatoPerConferma = null
-                    }
+                    },
+                    contentPadding = PaddingValues(horizontal = if (isTablet) 16.dp else 10.dp, vertical = if (isTablet) 8.dp else 2.dp)
                 ) {
-                    Text("No, Annulla", color = Color(0xFF475467))
+                    Text("No, Annulla", color = Color(0xFF475467), fontSize = if (isTablet) 14.sp else 11.sp)
                 }
             }
         )
     }
+
+
+
+
+
+
+
     // 🎯 NUOVO POPUP DI SICUREZZA PER L'INVIO DEI DATI COMPILATI AL SERVER PC WINDOWS
     if (showConfermaInvioDialog) {
         AlertDialog(
@@ -365,6 +405,7 @@ fun SchermataOperatore() {
             }
         )
     }
+
     // 🎯 NUOVO POPUP DI SICUREZZA PER INTERROMPERE LA COMPILAZIONE E SBLOCCARE IL SERVER
     if (showConfermaInterrompiDialog) {
         AlertDialog(
