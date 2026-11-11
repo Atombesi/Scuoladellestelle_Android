@@ -23,6 +23,7 @@ fun ZonaAltaView(
     isConnected: Boolean,
     isLoading: Boolean,
     statusMessage: String,
+    nomeDispositivo: String,
     onStartLoading: (String) -> Unit,
     onStatusChange: (Boolean, String, List<StructElencofogliJson>) -> Unit
 ) {
@@ -36,7 +37,6 @@ fun ZonaAltaView(
 
     var inputIp by remember { mutableStateOf(ipSalvato) }
     var inputPorta by remember { mutableStateOf(portaSalvata) }
-    var inputNota by remember { mutableStateOf(prefs.getString("nota_utente", "Tablet Aula 1") ?: "Tablet Aula 1") }
 
     LaunchedEffect(Unit) {
         NetworkConfig.IP_PC = ipSalvato
@@ -91,12 +91,16 @@ fun ZonaAltaView(
                     color = Color(0xFF98A2B3)
                 )
 
-                Text(
-                    text = " - $inputNota",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color(0xFF475467)
-                )
+                // TABLET-ANDROID-04: il nome server rimane visibile al cambio di statusMessage.
+                if (nomeDispositivo.isNotBlank()) {
+                    Text(
+                        text = nomeDispositivo,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color(0xFF475467)
+                    )
+                }
+
             }
         }
 
@@ -130,7 +134,6 @@ fun ZonaAltaView(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(value = inputIp, onValueChange = { inputIp = it }, label = { Text("IP PC Windows") }, singleLine = true)
                     OutlinedTextField(value = inputPorta, onValueChange = { inputPorta = it }, label = { Text("Porta Server") }, singleLine = true)
-                    OutlinedTextField(value = inputNota, onValueChange = { inputNota = it }, label = { Text("Nota Postazione") }, singleLine = true)
                 }
             },
             confirmButton = {
@@ -138,7 +141,6 @@ fun ZonaAltaView(
                     prefs.edit().apply {
                         putString("ip_pc", inputIp)
                         putString("porta_pc", inputPorta)
-                        putString("nota_utente", inputNota)
                         apply()
                     }
                     NetworkConfig.IP_PC = inputIp

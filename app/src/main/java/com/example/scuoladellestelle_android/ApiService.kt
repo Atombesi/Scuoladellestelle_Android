@@ -6,6 +6,8 @@ import android.provider.Settings
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+// TABLET-ANDROID-01: timeout cancellabile durante l'identificazione.
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
@@ -27,6 +29,9 @@ object ApiService {
 
     private var webSocket: WebSocket? = null
 
+    // TABLET-ANDROID-01: ogni tentativo possiede un solo timeout attivo.
+    private var timeoutConnessione: Job? = null
+
     // 🎯 Bandiera di controllo hardware per il Timeout di sicurezza
     private var elencoGiaArrivato = false
 
@@ -36,6 +41,14 @@ object ApiService {
     var onConnessioneStabilità: ((Boolean, String) -> Unit)? = null
     var onElencoRicevuto: ((List<StructElencofogliJson>) -> Unit)? = null
     var onContenutoFoglioRicevuto: ((String) -> Unit)? = null
+
+    // TABLET-ANDROID-01: evento per la UI; non apre direttamente finestre.
+    var onIdentificazioneRichiesta: ((String) -> Unit)? = null
+
+    // TABLET-ANDROID-04: ultimo nome ricevuto dal server, indipendente dallo stato operativo.
+    var nomeDispositivo: String = ""
+        private set
+    var onNomeDispositivoRicevuto: ((String) -> Unit)? = null
 
     /**
      * 🌐 CONNETTI, EFFETTUA HANDSHAKE E RICHIEDI ELENCO IN AUTOMATICO
@@ -51,6 +64,9 @@ object ApiService {
         this.onConnessioneStabilità = onStatoConnessione
         this.onElencoRicevuto = onElencoFogli
 
+        // TABLET-ANDROID-01: il parametro notaUtente resta per compatibilità,
+        // ma la nota locale non viene inviata nel primo HANDSHAKE.
+        timeoutConnessione?.cancel()
         webSocket?.close(1000, "Reset")
         webSocket = null
 
@@ -70,32 +86,46 @@ object ApiService {
                 val pacchettoHandshake = JSONObject().apply {
                     put("type", "HANDSHAKE")
                     put("device_id", idDispositivoSessione)
-                    put("nota_utente", notaUtente.ifBlank { "Postazione Tablet" })
+                    // TABLET-ANDROID-01: la nota viene inviata solo su conferma dell'operatore.
                 }
                 webSocket.send(pacchettoHandshake.toString())
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 scope.launch {
+                    // TABLET-ANDROID-01: ignora messaggi di connessioni precedenti.
+                    if (this@ApiService.webSocket !== webSocket) return@launch
                     elaboraTestoDalSocket(text)
                 }
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 scope.launch {
+                    // TABLET-ANDROID-01: preserva il messaggio della chiusura controllata.
+                    if (this@ApiService.webSocket !== webSocket) return@launch
+                    timeoutConnessione?.cancel()
                     onConnessioneStabilità?.invoke(false, "Connessione interrotta dal server PC.")
                 }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 scope.launch {
+                    // TABLET-ANDROID-01: un vecchio socket non altera il tentativo corrente.
+                    if (this@ApiService.webSocket !== webSocket) return@launch
+                    timeoutConnessione?.cancel()
                     onConnessioneStabilità?.invoke(false, "Server non raggiungibile. Verifica IP e porta.")
                 }
             }
         })
 
-        // TIMER DI TIMEOUT DI SICUREZZA (8 Secondi)
-        scope.launch {
+        // TABLET-ANDROID-01: mantiene gli 8 secondi, con possibilità di sospensione.
+        avviaTimeoutConnessione()
+    }
+
+    // TABLET-ANDROID-01: riutilizzato dopo l'invio della nota, senza contare il tempo di digitazione.
+    private fun avviaTimeoutConnessione() {
+        timeoutConnessione?.cancel()
+        timeoutConnessione = scope.launch {
             delay(8000)
             if (!elencoGiaArrivato) {
                 Log.e(TAG, "⏳ TIMEOUT! Il server VB.NET non ha risposto entro 8 secondi.")
@@ -109,8 +139,24 @@ object ApiService {
             val json = JSONObject(testoGrezzo)
 
             when (json.optString("type")) {
+                // TABLET-ANDROID-01: il socket resta aperto mentre la UI raccoglie la nota.
+                "HANDSHAKE_REGISTRATION_REQUIRED" -> {
+                    timeoutConnessione?.cancel()
+                    onIdentificazioneRichiesta?.invoke(
+                        json.optString("messaggio", "Inserisci una nota identificativa.")
+                    )
+                }
+
+                // TABLET-ANDROID-01: notifica il rifiuto usando il messaggio del server.
+                "ACCESSO_NEGATO" -> {
+                    disconnettiConMessaggio(json.optString("messaggio", "Dispositivo non autorizzato."))
+                }
+
                 "HANDSHAKE_OK" -> {
                     val nomeAssegnato = json.optString("nome_dispositivo", "Tablet Registrato")
+                    // TABLET-ANDROID-04: conserva il dato e notifica la UI sul dispatcher principale.
+                    nomeDispositivo = nomeAssegnato
+                    onNomeDispositivoRicevuto?.invoke(nomeAssegnato)
                     onConnessioneStabilità?.invoke(true, "Connesso: $nomeAssegnato")
 
                     // 🎯 LA MODIFICA: Componiamo un JSON strutturato inserendo sia il type sia l'id hardware reale del tablet!
@@ -190,6 +236,21 @@ object ApiService {
         }
     }
 
+    // TABLET-ANDROID-01: true indica che il socket ha accodato l'invio, non l'approvazione.
+    // Note vuote o socket non disponibile restituiscono false senza inviare nulla.
+    fun inviaHandshakeRegistrazione(notaUtente: String): Boolean {
+        if (notaUtente.isBlank()) return false
+        val socketCorrente = webSocket ?: return false
+        val pacchettoHandshake = JSONObject().apply {
+            put("type", "HANDSHAKE")
+            put("device_id", idDispositivoSessione)
+            put("nota_utente", notaUtente.trim())
+        }
+        val inviato = socketCorrente.send(pacchettoHandshake.toString())
+        if (inviato) avviaTimeoutConnessione()
+        return inviato
+    }
+
     fun inviaComandoAlPC(comandoJson: String) {
         CoroutineScope(Dispatchers.IO).launch {
             webSocket?.send(comandoJson)
@@ -200,6 +261,8 @@ object ApiService {
      * Chiude la linea in modo pulito forzando un testo di spiegazione sulla UI
      */
     private fun disconnettiConMessaggio(messaggioUtente: String) {
+        // TABLET-ANDROID-01: evita che il timeout sovrascriva l'esito del server.
+        timeoutConnessione?.cancel()
         webSocket?.close(1000, "Chiusura controllata")
         webSocket = null
         scope.launch {

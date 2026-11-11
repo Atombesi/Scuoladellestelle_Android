@@ -32,6 +32,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+// TABLET-ANDROID-02: campo identificativo e adattamento alla tastiera.
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.material3.OutlinedTextField
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,6 +54,43 @@ fun SchermataOperatore() {
     var statusMessage by remember { mutableStateOf("Disconnesso. Premi 'Verifica Connessione' per iniziare.") }
     var fogliList by remember { mutableStateOf(listOf<StructElencofogliJson>()) }
     var selectedId by remember { mutableStateOf<Int?>(null) }
+
+    // TABLET-ANDROID-04: stato separato dai messaggi; recupera anche un nome già ricevuto.
+    var nomeDispositivo by remember { mutableStateOf(ApiService.nomeDispositivo) }
+    DisposableEffect(Unit) {
+        val nomeRicevuto: (String) -> Unit = { nomeDispositivo = it }
+        ApiService.onNomeDispositivoRicevuto = nomeRicevuto
+        nomeDispositivo = ApiService.nomeDispositivo
+        onDispose {
+            if (ApiService.onNomeDispositivoRicevuto === nomeRicevuto) {
+                ApiService.onNomeDispositivoRicevuto = null
+            }
+        }
+    }
+
+    // TABLET-ANDROID-02: nessuna apertura iniziale; solo la callback abilita il dialog.
+    var showIdentificazioneDialog by remember { mutableStateOf(false) }
+    var notaIdentificazione by remember { mutableStateOf("") }
+    var erroreIdentificazione by remember { mutableStateOf<String?>(null) }
+
+    // TABLET-ANDROID-02: registra una sola callback e rimuove soltanto quella
+    // appartenente a questa schermata quando esce dalla composizione.
+    DisposableEffect(Unit) {
+        val identificazioneRichiesta: (String) -> Unit = { _ ->
+            if (!showIdentificazioneDialog) {
+                notaIdentificazione = ""
+                erroreIdentificazione = null
+                showIdentificazioneDialog = true
+            }
+            isLoading = false
+        }
+        ApiService.onIdentificazioneRichiesta = identificazioneRichiesta
+        onDispose {
+            if (ApiService.onIdentificazioneRichiesta === identificazioneRichiesta) {
+                ApiService.onIdentificazioneRichiesta = null
+            }
+        }
+    }
 
     // Memoria di stato per la stringa del singolo foglio ricevuto
     var jsonFoglioSelezionato by remember { mutableStateOf<String?>(null) }
@@ -110,6 +150,7 @@ fun SchermataOperatore() {
 
         // 1. ZONA ALTA
         ZonaAltaView(
+            nomeDispositivo = nomeDispositivo,
             isConnected = isConnected,
             isLoading = isLoading,
             statusMessage = statusMessage,
@@ -247,6 +288,65 @@ fun SchermataOperatore() {
 
 
 
+
+    // TABLET-ANDROID-02: dimensioni naturali e contenuto scorrevole anche con IME
+    // in landscape. Indietro e tocco esterno equivalgono ad Annulla.
+    if (showIdentificazioneDialog) {
+        val annullaIdentificazione: () -> Unit = {
+            showIdentificazioneDialog = false
+            erroreIdentificazione = null
+            isLoading = false
+            ApiService.disconnetti()
+        }
+        AlertDialog(
+            modifier = Modifier.imePadding(),
+            onDismissRequest = annullaIdentificazione,
+            title = {
+                Text("Identificazione dispositivo", fontSize = 16.sp)
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Inserisci un messaggio per richiedere l'accesso.", fontSize = 14.sp)
+                    OutlinedTextField(
+                        value = notaIdentificazione,
+                        onValueChange = {
+                            notaIdentificazione = it
+                            erroreIdentificazione = null
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Messaggio identificativo") },
+                        singleLine = true,
+                        isError = erroreIdentificazione != null
+                    )
+                    erroreIdentificazione?.let { errore ->
+                        Text(errore, color = Color(0xFFB42318), fontSize = 12.sp)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = notaIdentificazione.isNotBlank(),
+                    onClick = {
+                        if (ApiService.inviaHandshakeRegistrazione(notaIdentificazione)) {
+                            // TABLET-ANDROID-02: PENDING non riapre il dialog;
+                            // l'invio accodato non equivale all'approvazione.
+                            showIdentificazioneDialog = false
+                            isLoading = true
+                            statusMessage = "Richiesta di accesso inviata. Attendo risposta dal server..."
+                        } else {
+                            erroreIdentificazione = "Invio non riuscito. Verifica la connessione o annulla."
+                        }
+                    }
+                ) { Text("Invia") }
+            },
+            dismissButton = {
+                TextButton(onClick = annullaIdentificazione) { Text("Annulla") }
+            }
+        )
+    }
 
     // 🎯 NUOVO DIALOG DI SICUREZZA ADATTIVO PER TABLET E CELLULARE IN ORIZZONTALE
     if (showConfermaDialog && foglioSelezionatoPerConferma != null) {
