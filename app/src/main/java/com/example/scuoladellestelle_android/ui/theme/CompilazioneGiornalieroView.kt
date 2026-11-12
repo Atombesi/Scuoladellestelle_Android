@@ -55,8 +55,12 @@ fun CompilazioneGiornalieroView(
         campoAttivoId = 1
     }
 
+    // Ogni nuova istanza parte dalla prima voce, ignorando l'ID del questionario iniziale.
+    var primaSelezioneEsterna by remember { mutableStateOf(true) }
     LaunchedEffect(indiceSelezionatoEsterno) {
-        if (indiceSelezionatoEsterno > 0) {
+        if (primaSelezioneEsterna) {
+            primaSelezioneEsterna = false
+        } else if (indiceSelezionatoEsterno > 0) {
             indiceUnificatoSelezionato = indiceSelezionatoEsterno
             campoAttivoId = 1
         }

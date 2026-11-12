@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedTextField
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         setContent {
             Surface(modifier = Modifier.fillMaxSize(), color = Color(0xFFF0F2F5)) {
                 SchermataOperatore()
