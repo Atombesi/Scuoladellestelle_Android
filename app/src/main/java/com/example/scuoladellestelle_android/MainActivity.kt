@@ -1,6 +1,7 @@
 package com.example.scuoladellestelle_android
 
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,18 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 // TABLET-ANDROID-02: campo identificativo e adattamento alla tastiera.
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.union
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.compose.material3.OutlinedTextField
 
 class MainActivity : ComponentActivity() {
@@ -298,54 +311,111 @@ fun SchermataOperatore() {
             isLoading = false
             ApiService.disconnetti()
         }
-        AlertDialog(
-            modifier = Modifier.imePadding(),
-            onDismissRequest = annullaIdentificazione,
-            title = {
-                Text("Identificazione dispositivo", fontSize = 16.sp)
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text("Inserisci un messaggio per richiedere l'accesso.", fontSize = 14.sp)
-                    OutlinedTextField(
-                        value = notaIdentificazione,
-                        onValueChange = {
-                            notaIdentificazione = it
-                            erroreIdentificazione = null
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Messaggio identificativo") },
-                        singleLine = true,
-                        isError = erroreIdentificazione != null
-                    )
-                    erroreIdentificazione?.let { errore ->
-                        Text(errore, color = Color(0xFFB42318), fontSize = 12.sp)
-                    }
+        if (LocalConfiguration.current.smallestScreenWidthDp < 600) {
+            Dialog(
+                onDismissRequest = annullaIdentificazione,
+                properties = DialogProperties(
+                    usePlatformDefaultWidth = false,
+                    decorFitsSystemWindows = false
+                )
+            ) {
+                val dialogWindow = (LocalView.current.parent as DialogWindowProvider).window
+                DisposableEffect(dialogWindow) {
+                    val previousSoftInputMode = dialogWindow.attributes.softInputMode
+                    dialogWindow.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+                    onDispose { dialogWindow.setSoftInputMode(previousSoftInputMode) }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    enabled = notaIdentificazione.isNotBlank(),
-                    onClick = {
-                        if (ApiService.inviaHandshakeRegistrazione(notaIdentificazione)) {
-                            // TABLET-ANDROID-02: PENDING non riapre il dialog;
-                            // l'invio accodato non equivale all'approvazione.
-                            showIdentificazioneDialog = false
-                            isLoading = true
-                            statusMessage = "Richiesta di accesso inviata. Attendo risposta dal server..."
-                        } else {
-                            erroreIdentificazione = "Invio non riuscito. Verifica la connessione o annulla."
+                // The IME reduces the available area from below; the row stays at its top.
+                // Union avoids counting overlapping system/keyboard insets twice.
+                Box(
+                    modifier = Modifier.fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.safeDrawing.union(WindowInsets.ime)),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Surface(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = notaIdentificazione,
+                                onValueChange = {
+                                    notaIdentificazione = it
+                                    erroreIdentificazione = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                placeholder = { Text("Messaggio identificativo", maxLines = 1) },
+                                singleLine = true,
+                                isError = erroreIdentificazione != null
+                            )
+                            TextButton(
+                                enabled = notaIdentificazione.isNotBlank(),
+                                onClick = {
+                                    if (ApiService.inviaHandshakeRegistrazione(notaIdentificazione)) {
+                                        showIdentificazioneDialog = false
+                                        isLoading = true
+                                        statusMessage = "Richiesta di accesso inviata. Attendo risposta dal server..."
+                                    } else {
+                                        erroreIdentificazione = "Invio non riuscito. Verifica la connessione o annulla."
+                                    }
+                                }
+                            ) { Text("OK", maxLines = 1) }
+                            TextButton(onClick = annullaIdentificazione) { Text("Annulla", maxLines = 1) }
                         }
                     }
-                ) { Text("Invia") }
-            },
-            dismissButton = {
-                TextButton(onClick = annullaIdentificazione) { Text("Annulla") }
+                }
             }
-        )
+        } else {
+            AlertDialog(
+                modifier = Modifier.imePadding(),
+                onDismissRequest = annullaIdentificazione,
+                title = {
+                    Text("Identificazione dispositivo", fontSize = 16.sp)
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Inserisci un messaggio per richiedere l'accesso.", fontSize = 14.sp)
+                        OutlinedTextField(
+                            value = notaIdentificazione,
+                            onValueChange = {
+                                notaIdentificazione = it
+                                erroreIdentificazione = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Messaggio identificativo") },
+                            singleLine = true,
+                            isError = erroreIdentificazione != null
+                        )
+                        erroreIdentificazione?.let { errore ->
+                            Text(errore, color = Color(0xFFB42318), fontSize = 12.sp)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        enabled = notaIdentificazione.isNotBlank(),
+                        onClick = {
+                            if (ApiService.inviaHandshakeRegistrazione(notaIdentificazione)) {
+                                // TABLET-ANDROID-02: PENDING non riapre il dialog;
+                                // l'invio accodato non equivale all'approvazione.
+                                showIdentificazioneDialog = false
+                                isLoading = true
+                                statusMessage = "Richiesta di accesso inviata. Attendo risposta dal server..."
+                            } else {
+                                erroreIdentificazione = "Invio non riuscito. Verifica la connessione o annulla."
+                            }
+                        }
+                    ) { Text("Invia") }
+                },
+                dismissButton = {
+                    TextButton(onClick = annullaIdentificazione) { Text("Annulla") }
+                }
+            )
+        }
     }
 
     // 🎯 NUOVO DIALOG DI SICUREZZA ADATTIVO PER TABLET E CELLULARE IN ORIZZONTALE

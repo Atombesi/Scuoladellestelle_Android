@@ -34,6 +34,7 @@ fun ZonaCentraleView(
 ) {
     // STATO LOCALE: Registra il testo quando il server risponde
     var jsonFoglioContenuto by remember { mutableStateOf<String?>(null) }
+    var primoElencoRicevuto by remember { mutableStateOf(false) }
 
     // RECUPERO ID HARDWARE REALE
     val contestoAndroid = LocalContext.current
@@ -149,6 +150,7 @@ fun ZonaCentraleView(
                                         onStatusChange(connesso, messaggio, emptyList())
                                     },
                                     onElencoFogli = { listaRicevuta ->
+                                        primoElencoRicevuto = true
                                         // Spinge l'elenco dei fogli finale alla MainActivity che aggiorna la griglia
                                         onStatusChange(true, "Elenco caricato con successo.", listaRicevuta)
                                     },
@@ -161,7 +163,7 @@ fun ZonaCentraleView(
                             shape = RoundedCornerShape(6.dp),
                             enabled = !isLoading
                         ) {
-                            Text("Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(if (primoElencoRicevuto) "Reload" else "Connetti", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
 
 
