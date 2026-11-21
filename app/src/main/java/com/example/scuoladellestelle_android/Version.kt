@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.Configuration
 
 object AppVersion {
-    const val CODICE = "1.02"
+    const val CODICE = "1.03"
 
     // 🎯 FUNZIONE GLOBALE: Rileva il tipo di dispositivo ovunque nel progetto
     fun isTablet(context: Context): Boolean {
